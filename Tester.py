@@ -1,0 +1,5 @@
+print(100&(~0b111))
+print(bin(100))
+print(bin(100&(~0b111)))
+print(bin(~0b111))
+print(100&(-0b1000))
