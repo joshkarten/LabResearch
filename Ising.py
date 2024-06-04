@@ -187,6 +187,14 @@ def D_Bernoulli(chain_prev, chain_current, J):
     return chain_next
 
 
+def D_Order(chain_prev, chain_current):
+    param = 0
+    size = np.size(chain_prev)
+    for i in range(np.shape(chain_prev)[0]):
+        for j in range(np.shape(chain_prev)[1]):
+            param += (1/size) * S(chain_prev[i, j], chain_current[i, j])
+    return param
+
 def to_dec( integer, length):
     ans = 0
     i = length
@@ -198,7 +206,7 @@ def to_dec( integer, length):
     return ans
 
 np.random.seed(10)
-length = 4
+length = 10
 # Testing the sign function
 # print(S(1,1), S(1,0), S(0,0), S(0,1))
 # Testing the Delta function
@@ -207,13 +215,40 @@ D = Delta(np.array([[1,1],[1,1]]),np.array([[1,1],[1,1]]),1)
 print(np.tanh(1),"\n", D)
 '''
 # Delta function should work, needs more extensive testing
-'''
+
 #chain0 = np.random.rand(length)
-chain0 = np.array([[1,1],[1,1]])
+'''
+chain0 = np.array([[.5,.5],[.5,.5]])
 chain1 = chain0
-chain2 = D_Bernoulli(chain0, chain1, 0.25)
+chain2 = D_Bernoulli(chain0, chain1, .5)
+print(Delta(chain0, chain1, .5))
 print(chain0, "\n", chain1, "\n","\n", chain2)
 '''
+param = np.zeros(201)
+n = 0
+for Jtemp in range(100, 301):
+    J = Jtemp / 100
+    print(J)
+    for loops in range(100):
+        #print(loops)
+        chain0 = np.random.rand(length,length)
+        #chain0 = np.array([chain0, chain0])
+        chain1 = chain0
+        for steps in range((length**2)//2):
+            chain2 = D_Bernoulli(chain0, chain1, J)
+            chain0 = chain1
+            chain1=chain2
+        param[n] += D_Order(chain0, chain1)/100
+    n += 1
+fig, ax = plt.subplots()
+ax.plot( np.linspace(1.00,3.01, 201), param, marker='o')
+ax.set_xlabel(r'Coupling')
+ax.set_ylabel(r'$ <\hat{O}>$')
+ax.set_title(r'Results of a Simulation with Chain length '+str(length))
+#fig.save("200 Length BitString, Full Probability Spectrum")
+plt.show()
+
+
 """
 # Tests the conversion and control
 test = dec2int(0.5, 4)
