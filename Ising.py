@@ -3,10 +3,13 @@ import random
 import matplotlib.pyplot as plt
 from fractions import Fraction
 """
-num << 1 for leftshift
-num >> 1 for rightshift
-x ^ y for XOR
-Changing the control map to work for a coupled bernoulli map
+num << 1 for leftshift 
+num >> 1 for rightshift 
+x ^ y for XOR 
+Changing the control map to work for a coupled bernoulli map 
+Initial step is to reproduce the ising transition in the second part of 
+https://academic.oup.com/ptp/article/80/1/7/1873647?login=false
+
 """
 
 def _init_( num, Length):
@@ -27,11 +30,7 @@ def to_bin_array( num, Length):
 
 
 def dec2int( num, length):
-    """
-
-    :type num: Fraction
-    :type length: int
-    """
+    # Converts a decimal to an equivalent integer representation to work with binary operations
     assert 0 <= num < 1, length > 0
     return int(num * (2 ** length))
 
@@ -78,13 +77,13 @@ def order_parameter(num, length):
     param = float(0)
     binrep ="{0:b}".format(left(num, length)^num)
     count = 2*binrep.count('1')/length-1
-    for i in range(length):
-        if i == length-1:
-            param += -((-1) ** (((num >> i) % 2) + 1)) * (-1) ** ((num % 2) + 1)
+    #for i in range(length):
+    #    if i == length-1:
+    #        param += -((-1) ** (((num >> i) % 2) + 1)) * (-1) ** ((num % 2) + 1)
         #if i == 0:
         #    param += ((-1) ** ((num % 2) ^ 1)) * (-1) ** (((num >> 1) % 2) ^ 1)
-        else:
-            param += -((-1) ** (((num >> i) % 2) + 1)) * (-1) ** (((num >> (i + 1)) % 2) + 1)
+    #    else:
+    #        param += -((-1) ** (((num >> i) % 2) + 1)) * (-1) ** (((num >> (i + 1)) % 2) + 1)
     return count
 
 
@@ -109,6 +108,85 @@ def control(num, length):
     return temp
 
 
+def S(chain_prev, chain_current):
+    if chain_current < chain_prev:
+        return -1
+    else:
+        return 1
+
+
+def Delta(chain_prev, chain_current, J):
+    Del = np.zeros(chain_prev.shape)
+    imax = chain_prev.shape[0]-1
+    jmax = chain_prev.shape[1]-1
+    for i in range(imax+1):
+        if i == 0:
+            for j in range(jmax+1):
+                if j == 0:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[imax, j], chain_current[imax, j])
+                                                 + S(chain_prev[i + 1, j], chain_current[i + 1, j])
+                                                 + S(chain_prev[i, jmax], chain_current[i, jmax])
+                                                 + S(chain_prev[i, j + 1], chain_current[i, j + 1])))
+                elif j == chain_prev.shape[1] - 1:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[imax, j], chain_current[imax, j])
+                                                 + S(chain_prev[i + 1, j], chain_current[i + 1, j])
+                                                 + S(chain_prev[i, j - 1], chain_current[i, j - 1])
+                                                 + S(chain_prev[i, 0], chain_current[i, 0])))
+                else:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[imax, j], chain_current[imax, j])
+                                                 + S(chain_prev[i + 1, j], chain_current[i + 1, j])
+                                                 + S(chain_prev[i, j - 1], chain_current[i, j - 1])
+                                                 + S(chain_prev[i, j + 1], chain_current[i, j + 1])))
+        elif i == chain_prev.shape[0]-1:
+            for j in range(jmax +1):
+                if j == 0:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[i - 1, j], chain_current[i - 1, j])
+                                                 + S(chain_prev[0, j], chain_current[0, j])
+                                                 + S(chain_prev[i, jmax], chain_current[i, jmax])
+                                                 + S(chain_prev[i, j + 1], chain_current[i, j + 1])))
+                elif j == chain_prev.shape[1]-1:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[i - 1, j], chain_current[i - 1, j])
+                                                 + S(chain_prev[0, j], chain_current[0, j])
+                                                 + S(chain_prev[i, j - 1], chain_current[i, j - 1])
+                                                 + S(chain_prev[i, 0], chain_current[i, 0])))
+                else:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[i - 1, j], chain_current[i - 1, j])
+                                                 + S(chain_prev[0, j], chain_current[0, j])
+                                                 + S(chain_prev[i, j - 1], chain_current[i, j - 1])
+                                                 + S(chain_prev[i, j + 1], chain_current[i, j + 1])))
+        else:
+            for j in range(jmax +1):
+                if j == 0:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[i - 1, j], chain_current[i - 1, j])
+                                                 + S(chain_prev[i + 1, j], chain_current[i + 1, j])
+                                                 + S(chain_prev[i, jmax], chain_current[i, jmax])
+                                                 + S(chain_prev[i, j + 1], chain_current[i, j + 1])))
+                elif j == chain_prev.shape[1]-1:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[i - 1, j], chain_current[i - 1, j])
+                                                 + S(chain_prev[i + 1, j], chain_current[i + 1, j])
+                                                 + S(chain_prev[i, j - 1], chain_current[i, j - 1])
+                                                 + S(chain_prev[i, 0], chain_current[i, 0])))
+                else:
+                    Del[i, j] = np.tanh(J / 4 * (S(chain_prev[i - 1, j], chain_current[i - 1, j])
+                                                 + S(chain_prev[i + 1, j], chain_current[i + 1, j])
+                                                 + S(chain_prev[i, j - 1], chain_current[i, j - 1])
+                                                 + S(chain_prev[i, j + 1], chain_current[i, j + 1])))
+    return Del
+
+
+def D_Bernoulli(chain_prev, chain_current, J):
+    # takes in an initial array and returns a modified array by applying the bernoulli rule
+    chain_next = np.zeros(chain_prev.shape)
+    delta = Delta(chain_prev, chain_current, J)
+    for i in range(chain_next.shape[0]):
+        for j in range(chain_next.shape[1]):
+            if chain_prev[i, j] < delta[i, j]:
+                chain_next[i, j] = (1/delta[i, j])*chain_prev[i, j]
+            else:
+                chain_next[i, j] = (1/(1-delta[i, j]))*(chain_prev[i, j]- delta[i, j])
+    return chain_next
+
+
 def to_dec( integer, length):
     ans = 0
     i = length
@@ -119,7 +197,23 @@ def to_dec( integer, length):
         integer = integer//2
     return ans
 
-
+np.random.seed(10)
+length = 4
+# Testing the sign function
+# print(S(1,1), S(1,0), S(0,0), S(0,1))
+# Testing the Delta function
+'''
+D = Delta(np.array([[1,1],[1,1]]),np.array([[1,1],[1,1]]),1)
+print(np.tanh(1),"\n", D)
+'''
+# Delta function should work, needs more extensive testing
+'''
+#chain0 = np.random.rand(length)
+chain0 = np.array([[1,1],[1,1]])
+chain1 = chain0
+chain2 = D_Bernoulli(chain0, chain1, 0.25)
+print(chain0, "\n", chain1, "\n","\n", chain2)
+'''
 """
 # Tests the conversion and control
 test = dec2int(0.5, 4)
