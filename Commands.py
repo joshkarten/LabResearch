@@ -1,96 +1,100 @@
-import random
-
 import numpy as np
-import scipy
+import random
+import matplotlib.pyplot as plt
+from fractions import Fraction
 
 
-def to_bin_array(num, Length):
+def to_bin_array( num, Length):
     array = np.empty(Length, bool)
-    assert 0 <= num < 1
-    for i in range(Length):
-        if num * 2 >= 1:
+    for i in range(Length, -1, 1):
+        if num % 2 == 1:
             array[i] = 1
-            num = num * 2 - 1
+            num = num // 2
         else:
             array[i] = 0
-            num = num * 2
+            num = num / 2
     return array
 
 
-def left_shift(binArray):
-    store = binArray[0]
-    for i in range(len(binArray) - 1):
-        binArray[i] = binArray[i + 1]
-    binArray[len(binArray) - 1] = store
-    return binArray
+def dec2int( num, length):
+    """
+
+    :type num: Fraction
+    :type length: int
+    """
+    assert 0 <= num < 1, length > 0
+    return int(num * (2 ** length))
 
 
-def right_shift(binArray):
-    for i in range(len(binArray) - 1, 0, -1):
-        binArray[i] = binArray[i - 1]
-    binArray[0] = 0
-    return binArray
+def reset(bin_num):
+    """
+    :type bin_num: int
+    odd numbers end with b_L =1
+    num - 1 for set b_L = 0 if odd
+    """
+    if bin_num % 2 == 1:
+        bin_num = bin_num - 1
+    return bin_num
 
 
-def apply_control(binArray):
-    if binArray[0] == 1:
-        return to_bin_array(2 / 3, len(binArray))
+def left(num, length):
+    """
+
+    :param num: int
+    :param length: int
+    :return: int
+    """
+    if num >= 2 << (length - 2):
+        num = (num << 1) ^ 1
     else:
-        return to_bin_array(1 / 3, len(binArray))
+        num = num << 1
+    return num % (2 ** (length))
 
 
-def adder(bin1, bin2):
-    assert len(bin1) == len(bin2)
-    print(bin1)
-    store = False
-    bin3=np.empty(len(bin1),bool)
-    for i in range(len(bin1) - 1, -1, -1):
-        #print("bin3", bin3, "\nstore",store, "\n", (bin2[i] and store) or (store and bin1[i]) or (bin1[i] and bin2[i]))
-        bin3[i] = bin1[i] ^ bin2[i] ^ store
-        #print("bin3", bin3, "\nbin1", bin1, "\nbin2", bin2)
-        if (bin2[i] and store) or (store and bin1[i]) or (bin1[i] and bin2[i]): store = True
-        else: store = False
+def right(num):
+    """
+
+    :param num: int
+    :return: int
+    """
+    num = reset(num)
+    # if num % 2 ==1 and (num//2) % 2 == 0 and (num//4)%2 == 1:
+    #    num = num + 2
+    num = num // 2
+    return num
 
 
-    return bin3
+def order_parameter(num, length):
+    param = float(0)
+    binrep ="{0:b}".format(left(num, length)^num)
+    count = 2*binrep.count('1')/length-1
+    '''for i in range(length):
+        if i == length-1:
+            param += -((-1) ** (((num >> i) % 2) + 1)) * (-1) ** ((num % 2) + 1)
+        #if i == 0:
+        #    param += ((-1) ** ((num % 2) ^ 1)) * (-1) ** (((num >> 1) % 2) ^ 1)
+        else:
+            param += -((-1) ** (((num >> i) % 2) + 1)) * (-1) ** (((num >> (i + 1)) % 2) + 1)
+            '''
+    return count
 
 
-def bernoulli(bin):
-    bin = left_shift(bin)
-    # Then set last 3 digits of bin to 0
-    # After that, generate a random number between 0 and 8
-
-    return bin
+def bernoulli(num, length):
+    num = left(num, length)
+    num = num & (~0b111)
+    return num + random.randint(0, 8)
 
 
-def control(bin):
-    if bin[0]:
-        return adder(right_shift(bin), right_shift(to_bin_array(2 / 3)))
+def control(num, length):
+
+    if num < 2 ** (length-1):
+        xj = dec2int(Fraction(1, 3), length)
     else:
-        return adder(right_shift(bin), right_shift(to_bin_array(1 / 3)))
-
-
-binArray = to_bin_array(2 / 3, 5)
-print("binarray", binArray)
-left = left_shift(binArray)
-print("leftshift", left)
-right = right_shift(binArray)
-print("rightshift", right)
-add = adder(binArray, left)
-print(add)
-
-
-'''def dec2bin(xj, L, base=2):
-    return int(xj*(1<<L))
-
-
-def _initialize_binary(L, xj):
-        binary_xj = {xj / 2: dec2bin(xj / 2, L) for xj in xj}
-        return binary_xj
-
-
-x = np.binary_repr(10, 5)
-print(x)
-vec=dec2bin(5,5)
-vv = _initialize_binary(5,5)
-print(vec)'''
+        xj = dec2int(Fraction(2, 3), length)
+    if num == xj:
+        return num
+    else:
+        temp = right(num) + right(xj)
+    if temp == num:
+        return num + 1
+    return temp

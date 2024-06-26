@@ -195,6 +195,7 @@ def D_Order(chain_prev, chain_current):
             param += (1/size) * S(chain_prev[i, j], chain_current[i, j])
     return param
 
+
 def to_dec( integer, length):
     ans = 0
     i = length
@@ -204,6 +205,7 @@ def to_dec( integer, length):
         i-=1
         integer = integer//2
     return ans
+
 
 np.random.seed(10)
 length = 10

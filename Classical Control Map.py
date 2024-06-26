@@ -153,10 +153,10 @@ for i in range(6):
 '''
 # Tests the full thing with random ints over all probabilities
 
-length = 0
+length = 100
 random.seed(10)
 times = 100
-low_prob = 100
+low_prob = 00
 high_prob = 100 + 1
 record = np.zeros([high_prob-low_prob, 1], dtype=float)
 for k in range(0, times):
@@ -166,7 +166,6 @@ for k in range(0, times):
         #print(prob)
         number = random.random()
         #number = tests[k]
-        length = 200
         rep = dec2int(number, length)
         #print(k, rep, dec2int(Fraction(2, 3), length), dec2int(Fraction(1, 3), length))
         for i in range((length**2)//2):
@@ -183,7 +182,7 @@ for k in range(0, times):
 plt.rcParams.update({
     "text.usetex": False,
 })
-print(record[0])
+print(record[99])
 fig, ax = plt.subplots()
 ax.plot( np.linspace(0,1,high_prob-low_prob), record, marker='o')
 ax.set_xlabel(r'Probability of Selecting the Control Map')
