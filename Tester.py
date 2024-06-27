@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from Commands import dec2int
+from Commands import dec2int, order_parameter
 from fractions import Fraction
 from MonteCarloCommands import boltzmann_probability, energy
 
@@ -22,9 +22,16 @@ a = 10
 n = 2
 lattice = []
 length = 50
-number1 = random.random()
-number2 = random.random()
-number3 = random.random()
+testar = np.zeros((4,4))
+for i in range(4):
+    for j in range(4):
+        testar[i,j] = i*j
+print(testar[:,0])
+#print(bin(10)[10])
+test = ['0110','0100','0101']
+print(test[1][1]+test[0][1], int(test[1][1]+test[0][1],base=2), order_parameter(int(test[1][1]+test[0][1],base=2),2)
+      , order_parameter(int('000',base=2),3))
+print(2^4)
 '''
 for i in range(4):
     lattice.append(format(dec2int(Fraction(1,3),length), '0'+str(length)+'b'))
@@ -32,7 +39,10 @@ num = lattice[0]
 position_y = 2
 print(num)
 print(num[slice(1, length, length-2)].count('0'))
-'''
+number1 = random.random()
+number2 = random.random()
+number3 = random.random()
+
 rep1 = dec2int(number1, length)
 rep2 = dec2int(number2, length)
 rep3 = dec2int(number3, length)
@@ -51,7 +61,7 @@ for i in range(10000):
             else:
                 lattice[x_pos] = old
 print(lattice)
-'''
+
 print(bin(0))
 print( a^(0<<n), bin(a^(0<<n)))
 print(f'{a:b}', f'{a:b}'[1])
