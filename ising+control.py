@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import time
 
 
+# initialization of parameters
 length = 100
 random.seed(10)
 times = 10
@@ -21,6 +22,7 @@ record2 = np.zeros([high_prob-low_prob, 1], dtype=float)
 recordlong = np.zeros((high_prob-low_prob, length), dtype=float)
 for k in range(0, times):
     j = 0
+    # keeps track of loop progress
     print(k)
     for prob in range(low_prob, high_prob, 1):
         #print(prob)
@@ -32,6 +34,7 @@ for k in range(0, times):
         rep2 = dec2int(number2, length)
         #rep3 = dec2int(number3, length)
         #print(k, rep, dec2int(Fraction(2, 3), length), dec2int(Fraction(1, 3), length))
+        # control map
         for i in range((length**2)//2):
             if random.random() > (float(prob) / 100):
                 rep1 = bernoulli(rep1, length)
