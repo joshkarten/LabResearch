@@ -15,7 +15,7 @@ def boltzmann_probability(initial, final, beta):
 
 def energy(position_x, position_y, array, length_x, length_y, k, two_chains):
     num = array[position_x]
-    if two_chains: # needs to be fixed for later. bad imp, 2nd if is redundant, all are missing y edge conditions
+    if two_chains: # needs to be fixed for later. bad imp
         if position_y==length_y-1:
             return ((-1) **(~int(num[position_y], base=2))) * k * (3 - 2*(num[slice(0, position_y, position_y-1)].count('0') # perhaps change to (0b111^num).count('1')
                                                     + array[1-position_x][position_y].count('0')))
