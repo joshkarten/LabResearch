@@ -9,7 +9,7 @@ import random
 
 
 def boltzmann_probability(initial, final, beta):
-    return 1/(1+np.exp(beta * (final - initial)))
+    return 1/(1+np.exp(-beta * (final - initial)))
 
 
 
