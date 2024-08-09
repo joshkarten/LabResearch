@@ -9,49 +9,19 @@ import random
 
 
 def boltzmann_probability(initial, final, beta):
-    return 1/(1+np.exp(beta * (final - initial)))
+    return np.exp(-beta * (final - initial))/2
 
 
 
 def energy(position_x, position_y, array, length_x, length_y, k, two_chains):
-    num = array[position_x]
     if two_chains: # needs to be fixed for later. bad imp
-        if position_y==length_y-1:
-            return ((-1) **(~int(num[position_y], base=2))) * k * (3 - 2*(num[slice(0, position_y, position_y-1)].count('0') # perhaps change to (0b111^num).count('1')
-                                                    + array[1-position_x][position_y].count('0')))
-        if position_y==0:
-            return ((-1 )** (~int(num[position_y], base=2))) * k * (3 - 2*(num[slice(1, length_y, length_y - 2)].count('0')
-                                                        + array[1 - position_x][position_y].count('0')))
-        else:
-            return ((-1) ** (~int(num[position_y], base=2))) * k*(3 - 2*(num[slice(position_y-1, position_y+2, 2)].count('0')
-                                                    + array[1-position_x][position_y].count('0')))
+        return ((-1) **((array[position_x]&(1<<position_y))>>(position_y)) * k *((3-2*( ((array[position_x]&(1 << (position_y-1)%length_y))>>(position_y-1)%length_y) + ((array[position_x]&(1<<(position_y+1)%length_y))>>(position_y+1)%length_y) + 
+                                                                       ((array[1-position_x]&(1<<position_y))>>(position_y))))))
 
-    elif position_x == 0:
-        if position_y == length_y-1:
-            return ((-1) ** ~int(num[position_y], base=2)) *k* (4 - 2*(num[slice(0, position_y, length_y - 2)].count('0')
-                                                         + array[position_x - 1][position_y].count('0')
-                                                         + array[length_x-1][position_y].count('0')))
-        if position_y==0:
-            return ((-1) ** ~int(num[position_y], base=2)) * k * (4 - 2 * (num[slice(1, length_y, length_y - 2)].count('0')
-                                                                 + array[position_x + 1][position_y].count('0')
-                                                                 + array[length_x - 1][position_y].count('0')))
-        else:
-            return ((-1) ** ~int(num[position_y], base=2)) *k* (4 - 2*(num[slice(position_y - 1, position_y + 2, 2)].count('0')
-                                                         + array[position_x + 1][position_y].count('0')
-                                                         + array[length_x-1][position_y].count('0')))
+
     else:
-        if position_y == length_y-1:
-            return ((-1) ** ~int(num[position_y], base=2)) *k* (4 - 2* (num[slice(0, length_y, length_y-2)].count('0')
-                                                         + array[position_x + 1][position_y].count('0')
-                                                         + array[position_x - 1][position_y].count('0')))
-        if position_y == 0:
-            return ((-1) ** ~int(num[position_y], base=2)) * k * (4 - 2 * (num[slice(1, length_y, length_y - 2)].count('0')
-                                                                 + array[position_x + 1][position_y].count('0')
-                                                                 + array[position_x - 1][position_y].count('0')))
-        else:
-            return ((-1) ** ~int(num[position_y], base=2)) *k* (4 - 2*(num[slice(position_y - 1, position_y + 2, 2)].count('0')
-                                                         + array[position_x + 1][position_y].count('0')
-                                                         + array[position_x - 1][position_y].count('0')))
+        return ((-1) **(array[position_x]&(1<<position_y))) * k * (4-2*(array[position_x]&(1 << (position_y-1)%length_y) + array[position_x]&(1<<(position_y+1)%length_y) # perhaps change to (0b111^num).count('1')
+                                                    + array[1-position_x]&(1<<position_y)+array[1+position_x]&(1<<position_y)))
 
 '''
 length = 10
