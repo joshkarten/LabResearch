@@ -11,6 +11,8 @@ import random
 def boltzmann_probability(initial, final, beta):
     return np.exp(-beta * (final - initial))/2
 
+def glauber_energy(initial, final, beta):
+    return (np.exp(-beta*((final-initial)))/(1+np.exp(-beta*((final-initial)))))
 
 
 def energy(position_x, position_y, array, length_x, length_y, k, two_chains):
