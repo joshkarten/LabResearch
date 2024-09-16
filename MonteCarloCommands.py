@@ -25,6 +25,11 @@ def energy(position_x, position_y, array, length_x, length_y, k, two_chains):
         return ((-1) **(array[position_x]&(1<<position_y))) * k * (4-2*(array[position_x]&(1 << (position_y-1)%length_y) + array[position_x]&(1<<(position_y+1)%length_y) # perhaps change to (0b111^num).count('1')
                                                     + array[1-position_x]&(1<<position_y)+array[1+position_x]&(1<<position_y)))
 
+def OneDEnergy(position_y, chain,length_y, k):
+    return ((-1) **((chain&(1<<position_y))>>(position_y)) * k *((3-2*( ((chain&(1 << (position_y-1)%length_y))>>(position_y-1)%length_y) + ((chain&(1<<(position_y+1)%length_y))>>(position_y+1)%length_y) ))))
+# chain&(1<<position_y) removes less significant bits, >>position_y removes the more significant bits, in effect this selects a bit at a position from an integer representation
+# the %length_y is done to account for position_y=0
+# multiplying by k accounts for ferromagnetism or antiferromagnetism being favorable (k = -1 or 1)
 '''
 length = 10
 K = -1
