@@ -1,9 +1,8 @@
 import numpy as np
 from Commands import dec2int
-from line_profiler import LineProfiler
+#from line_profiler import LineProfiler
 import os
 import random
-
 #os.environ["LINE_PROFILER"] = "1"
 # int(binary, base=2) for bin to int
 
@@ -13,7 +12,6 @@ def boltzmann_probability(initial, final, beta):
 
 def glauber_energy(initial, final, beta):
     return (np.exp(-beta*((final-initial)))/(1+np.exp(-beta*((final-initial)))))
-
 
 def energy(position_x, position_y, array, length_x, length_y, k, two_chains):
     if two_chains: # needs to be fixed for later. bad imp
@@ -26,7 +24,9 @@ def energy(position_x, position_y, array, length_x, length_y, k, two_chains):
                                                     + array[1-position_x]&(1<<position_y)+array[1+position_x]&(1<<position_y)))
 
 def OneDEnergy(position_y, chain,length_y, k):
-    return ((-1) **((chain&(1<<position_y))>>(position_y)) * k *((3-2*( ((chain&(1 << (position_y-1)%length_y))>>(position_y-1)%length_y) + ((chain&(1<<(position_y+1)%length_y))>>(position_y+1)%length_y) ))))
+    return ((-1) **((chain&(1<<position_y))>>(position_y)) * k *
+            ((2-2*( ((chain&(1 << (position_y-1)%length_y))>>(position_y-1)%length_y) 
+                   + ((chain&(1<<(position_y+1)%length_y))>>(position_y+1)%length_y) ))))
 # chain&(1<<position_y) removes less significant bits, >>position_y removes the more significant bits, in effect this selects a bit at a position from an integer representation
 # the %length_y is done to account for position_y=0
 # multiplying by k accounts for ferromagnetism or antiferromagnetism being favorable (k = -1 or 1)
