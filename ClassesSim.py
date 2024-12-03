@@ -2,6 +2,8 @@ from fractions import Fraction
 from itertools import repeat
 import random
 import numpy as np
+import os
+import line_profiler
 class MCCTClassical:
     def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1 ):
         self.Length = Length # how long is each bit string
@@ -77,7 +79,7 @@ class MCCTClassical:
         num = num // 2
         return num
 
-
+    @line_profiler.profile
     def order_parameter(self,num):
         '''
         Calculates sigma_i sigma_j in an integer represenation of a bitstring.'''
@@ -86,13 +88,13 @@ class MCCTClassical:
 
         return count
 
-
+    @line_profiler.profile
     def bernoulli(self,num):
         num = self.left(num)
         num = num & (~0b111)
         return num + random.getrandbits(3)
 
-
+    @line_profiler.profile
     def control(self,num):
 
         if num < 2 ** (self.Length-1):
@@ -106,13 +108,13 @@ class MCCTClassical:
         if temp == num:
             return num + 1
         return temp
-
+    @line_profiler.profile
     def boltzmann_probability(self,initial, final, beta):
         '''
         Calculates a value from a modified Boltzmann distribution. The choice of 1/2 (which modifies the distribution) is to create bit scrambling when Beta=0 '''
         return np.exp(-beta * (final - initial))/2
         #boltzmann weight. we take 1/2 such that the state is continuously randomized at infinite
-
+    @line_profiler.profile
     def BitConfiguration1d(self,position_x,position_y):
     #problem: individual calculations are incredibly inefficient
     #solution: Make lookup tables for everything
@@ -151,9 +153,10 @@ class MCCTClassical:
    
     # The lookup dictionary is designed around taking in as many bits as there are nearest neighbors.
     #  Thus this imp has a bunch of different tables for each dimensionality
+    @line_profiler.profile
     def LookupEnergy1d(self,K,Beta):
         self.energyDict={}
-        self.energyDict[0,0,0] =min(1/2,self.boltzmann_probability(-2*K,2*K,Beta))
+        self.energyDict[0,0,0] =min(1/2,self.boltzmann_probability(2*K,-2*K,Beta))
         self.energyDict[1,1,1]=self.energyDict[0,0,0]
 
         self.energyDict[0,1,0]=min(1/2,self.boltzmann_probability(0,0,Beta))
@@ -161,7 +164,7 @@ class MCCTClassical:
         self.energyDict[1,0,1]=self.energyDict[0,1,0]
         self.energyDict[1,1,0]=self.energyDict[0,1,0]
 
-        self.energyDict[0,1,1]=min(1/2,self.boltzmann_probability(2*K,-2*K,Beta))
+        self.energyDict[0,1,1]=min(1/2,self.boltzmann_probability(-2*K,2*K,Beta))
         self.energyDict[1,0,0]=self.energyDict[0,1,1]
         return self.energyDict
     
@@ -250,6 +253,7 @@ class MCCTClassical:
         param =param+param2
         return param+param2
 #works as intended
+    @line_profiler.profile
     def Magnetization(self):
         param =0
         for i in self.lattice:
@@ -257,6 +261,7 @@ class MCCTClassical:
         param = 1- 2*param/self.latticeSize
         return param
 #works as intended
+    @line_profiler.profile
     def StaggeredMagnetization(self):
         param =0
         for i in range(0,self.numChains,2):
@@ -290,7 +295,7 @@ class MCCTClassical:
             self.LatticeOrderParameter=self.LatticeOrderParameter2d
             self.Step = self.Step2D
         return
-    
+    @line_profiler.profile
     def createLattice(self):
         lat = []
         for i in repeat(None,self.numChains):
@@ -326,16 +331,17 @@ class MCCTClassical:
                 self.lattice[i]=self.control(self.lattice[i])
         return
     # the correct phase transition is maintained in 1d
+    @line_profiler.profile
     def stochasticControl1d(self,prob):
         if random.random()>(prob/100.):
             self.lattice[0]=self.bernoulli(self.lattice[0])
         else:
             self.lattice[0]=self.control(self.lattice[0])
         return
-    
+    @line_profiler.profile
     def monteCarlo1d(self,time,betaNum,probNum,itt):
         if not (time%self.sampleFreq):
-            for nr in repeat(self.latticeSize):
+            for nr in repeat(None,self.latticeSize):
                 y_pos = random.randint(0,self.Length)
                 mbit,ubit,dbit = self.BitConfiguration(0,y_pos)
                 if self.energyDict[mbit,ubit,dbit]>random.random(): 
@@ -344,7 +350,7 @@ class MCCTClassical:
                 else:
                     pass
         else:
-            for nr in repeat(self.latticeSize):
+            for nr in repeat(None,self.latticeSize):
                 y_pos = random.randint(0,self.Length)
                 mbit,ubit,dbit, = self.BitConfiguration(y_pos)
                 if self.energyDict[mbit,ubit,dbit]>random.random(): 
@@ -355,7 +361,7 @@ class MCCTClassical:
     
     def monteCarloLadder(self,time,betaNum,probNum,itt):
         if not (time%self.sampleFreq):
-            for nr in repeat(self.latticeSize):
+            for nr in repeat(None,self.latticeSize):
                 x_pos = random.randint(0,self.numChains)
                 y_pos = random.randint(0,self.Length)
 
@@ -367,7 +373,7 @@ class MCCTClassical:
                 else:
                     pass
         else:
-            for nr in repeat(self.latticeSize):
+            for nr in repeat(None,self.latticeSize):
                 x_pos = random.randint(0,self.numChains)
                 y_pos = random.randint(0,self.Length)
  
@@ -381,7 +387,7 @@ class MCCTClassical:
     
     def monteCarlo2d(self,time,betaNum,probNum,itt):
         if not (time%self.sampleFreq):
-            for nr in repeat(self.latticeSize):
+            for nr in repeat(None,self.latticeSize):
                 x_pos = random.randint(0,self.numChains)
                 y_pos = random.randint(0,self.Length)
 
@@ -393,7 +399,7 @@ class MCCTClassical:
                 else:
                     pass
         else:
-            for nr in repeat(self.latticeSize):
+            for nr in repeat(None,self.latticeSize):
                 x_pos = random.randint(0,self.numChains)
                 y_pos = random.randint(0,self.Length)
 
@@ -404,7 +410,7 @@ class MCCTClassical:
                 else:
                     pass
         return
-    
+    @line_profiler.profile
     def Step1D(self,time,prob,b,p,itt):
         if not (time%self.sampleFreq):
             self.record1[itt,time//self.sampleFreq,b,p]=self.order_parameter(self.lattice[0])
@@ -413,7 +419,7 @@ class MCCTClassical:
         for controlfreq in repeat(None,self.ControlFreq):
             self.stochasticControl(prob)
         for mcfreq in repeat(None,self.MonteCarloFreq):
-           self.monteCarlo(time,b,itt)
+           self.monteCarlo(time,b,p,itt)
         return
     
     def StepLad(self,time,prob,b,p,itt):
@@ -426,7 +432,7 @@ class MCCTClassical:
         for controlfreq in repeat(None,self.ControlFreq):
             self.stochasticControl(prob)
         for mcfreq in repeat(None,self.MonteCarloFreq):
-           self.monteCarlo(time,b,itt)
+           self.monteCarlo(time,b,p,itt)
         return
     
     def Step2D(self,time,prob,b,p,itt):
@@ -437,7 +443,7 @@ class MCCTClassical:
         for controlfreq in repeat(None,self.ControlFreq):
             self.stochasticControl(prob)
         for mcfreq in repeat(None,self.MonteCarloFreq):
-           self.monteCarlo(time,b,itt)
+           self.monteCarlo(time,b,p,itt)
         return
     
     def Simulation(self):
