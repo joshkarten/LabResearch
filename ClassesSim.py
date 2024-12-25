@@ -4,9 +4,8 @@ import random
 import numpy as np
 import os
 from line_profiler import profile
-import multiprocessing
 class MCCTClassical:
-    def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1, boltzmannMod=1/2 ):
+    def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1,boltzmannMod=1/2, perLatSweep=True  ):
         self.Length = Length # how long is each bit string
         self.sampleFreq = sampleFreq #after how many update steps are the parameters calculated
         self.numChains = numChains # how many bit strings are there
@@ -23,16 +22,23 @@ class MCCTClassical:
         self.twoChains=True if numChains==2 else False
         self.latticeSize=Length*numChains
         self.boltzmannMod=boltzmannMod
+        if perLatSweep:
+            self.mcrep = self.latticeSize
+        else:
+            self.mcrep=1
         # number of data points along the time axis
         # we add 50 additional points to cluster our samples close to the start
         if not (self.totSteps%self.sampleFreq):
-            self.time_size = (self.totSteps)//self.sampleFreq
+            self.time_size = (self.totSteps)//self.sampleFreq+1
             
         else: 
-            self.time_size = (self.totSteps)//self.sampleFreq+1
+            self.time_size = (self.totSteps)//self.sampleFreq+2
         self.setDimensionality() # chooses functions to used based on number of chains
         self.createSamplingArrays() # these arrays store the calculated parameters
-    
+        if self.MonteCarloFreq==0:
+            betarange=[0]
+        if self.ControlFreq==0:
+            probrange=[0]    
         
     def dec2int(self, num):
         """
@@ -235,7 +241,7 @@ class MCCTClassical:
         self.energyDict[0,1,1,0,1]=self.energyDict[1,1,0,0,0] 
         self.energyDict[0,1,1,1,0]=self.energyDict[1,1,0,0,0]  #16
         return self.energyDict
-    # check this for proper implementation
+    # check this for proper iplementation
 
     def LatticeOrderParameterLad(self):
         param = 0
@@ -243,18 +249,17 @@ class MCCTClassical:
             param += (bin(self.left(i)^i).count('1')) # \sigma_(i,j)*\sigma_(i,j+1)
         param= (2*(2*param/self.latticeSize-1) +2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.latticeSize-1 )/3# \sigma_(i,j)*\sigma(i+j,j)
         return param
-    # verified
+    
     def LatticeOrderParameter2d(self):
-        '''Returns the energy of the lattice such that a fully aligned lattice returns -1 and a fully antialigned lattice returns 1'''
         param,param2 = 0,0
         for i in self.lattice:
-            param += (bin(self.left(i)^i).count('1')) # \sigma_(i,j)*\sigma_(i,j+1)
+            param += (bin(self.left(i,)^i).count('1')) # \sigma_(i,j)*\sigma_(i,j+1)
         param = (2*param/(self.latticeSize)-1)/2
         for i in range(self.numChains):
             param2+= (bin(self.lattice[i]^self.lattice[i-1]).count('1')) # \sigma_(i,j)*\sigma(i-1,j)
         param2 = (2*param2/(self.latticeSize)-1)/2
         param =param+param2
-        return param
+        return param+param2
 #works as intended
     @profile
     def Magnetization(self):
@@ -309,6 +314,7 @@ class MCCTClassical:
     def createSamplingArrays(self):
         self.acceptance = np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange))) # keeps track of monte carlo acceptance per step
         self.time_size=2*self.time_size #take two samples each time 
+
         if self.numChains==1:
             self.record1= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange))) #\sigma_i\sigma_j in a chain, effectively our energy
             self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))#Magnetization
@@ -345,7 +351,7 @@ class MCCTClassical:
     @profile
     def monteCarlo1d(self,time,betaNum,probNum,itt):
         if not (time%self.sampleFreq):
-            for nr in repeat(None,self.latticeSize):
+            for nr in repeat(None,self.mcrep):
                 y_pos = random.randrange(self.Length)
                 mbit,ubit,dbit = self.BitConfiguration(0,y_pos)
                 if self.energyDict[mbit,ubit,dbit]>random.random(): 
@@ -353,7 +359,7 @@ class MCCTClassical:
                     self.lattice[0] = self.lattice[0]^(0b1<<y_pos)
 
         else:
-            for nr in repeat(None,self.latticeSize):
+            for nr in repeat(None,self.mcrep):
                 y_pos = random.randrange(self.Length)
                 mbit,ubit,dbit, = self.BitConfiguration(0, y_pos)
                 if self.energyDict[mbit,ubit,dbit]>random.random(): 
@@ -363,7 +369,7 @@ class MCCTClassical:
     
     def monteCarloLadder(self,time,betaNum,probNum,itt):
         if not (time%self.sampleFreq):
-            for nr in repeat(None,self.latticeSize):
+            for nr in repeat(None,self.mcrep):
                 x_pos =  random.randrange(self.numChains)
                 y_pos =  random.randrange(self.Length)
 
@@ -374,7 +380,7 @@ class MCCTClassical:
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         else:
-            for nr in repeat(None,self.latticeSize):
+            for nr in repeat(None,self.mcrep):
                 x_pos =  random.randrange(self.numChains)
                 y_pos = random.randrange(self.Length)
  
@@ -386,7 +392,7 @@ class MCCTClassical:
         return             
     
     def monteCarlo2d(self,time,betaNum,probNum,itt):
-        if not (time%self.sampleFreq):
+        if not (time%self.mcrep):
             for nr in repeat(None,self.latticeSize):
                 x_pos =  random.randrange(self.numChains)
                 y_pos =  random.randrange(self.Length)
@@ -398,7 +404,7 @@ class MCCTClassical:
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         else:
-            for nr in repeat(None,self.latticeSize):
+            for nr in repeat(None,self.mcrep):
                 x_pos =  random.randrange(self.numChains)
                 y_pos =  random.randrange(self.Length)
 
@@ -406,7 +412,6 @@ class MCCTClassical:
 
                 if self.energyDict[mbit,ubit,dbit,lbit,rbit]>random.random(): 
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
-
         return
     @profile
     def Step1D(self,time,prob,b,p,itt):
@@ -482,7 +487,6 @@ class MCCTClassical:
                     self.createLattice()
                     for time in range(self.totSteps):
                         self.Step(time,prob,b,p,itt)
-                        
                 p+=1
             b+=1
         if self.twoChains:
