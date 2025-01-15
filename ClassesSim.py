@@ -243,7 +243,7 @@ class MCCTClassical:
         self.energyDict[0,1,1,1,0]=self.energyDict[1,1,0,0,0]  #16
         return self.energyDict
     # check this for proper iplementation
-
+    # verified for lattices [0,0],[15,15],[0,15],[15,0],[5,10],[0,10],[15,10]
     def LatticeOrderParameterLad(self):
         param = 0
         for i in self.lattice:
