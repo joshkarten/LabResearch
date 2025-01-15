@@ -243,7 +243,7 @@ class MCCTClassical:
         self.energyDict[0,1,1,1,0]=self.energyDict[1,1,0,0,0]  #16
         return self.energyDict
     # check this for proper iplementation
-    # verified for lattices [0,0],[15,15],[0,15],[15,0],[5,10],[0,10],[15,10]
+    # verified for lattices [0,0],[15,15],[0,15],[15,0],[5,10],[0,10],
     def LatticeOrderParameterLad(self):
         param = 0
         for i in self.lattice:
@@ -259,7 +259,6 @@ class MCCTClassical:
         for i in range(self.numChains):
             param2+= (bin(self.lattice[i]^self.lattice[i-1]).count('1')) # \sigma_(i,j)*\sigma(i-1,j)
         param2 = (2*param2/(self.latticeSize)-1)/2
-        param =param+param2
         return param+param2
 #works as intended
     @profile
