@@ -4,6 +4,7 @@ import random
 import numpy as np
 import os
 from line_profiler import profile
+
 class MCCTClassical:
     def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1,boltzmannMod=1/2, perLatSweep=True  ):
         self.Length = Length # how long is each bit string
@@ -247,7 +248,7 @@ class MCCTClassical:
         param = 0
         for i in self.lattice:
             param += (bin(self.left(i)^i).count('1')) # \sigma_(i,j)*\sigma_(i,j+1)
-        param= (2*(2*param/self.latticeSize-1) +2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.latticeSize-1 )/3# \sigma_(i,j)*\sigma(i+j,j)
+        param= (2*param/self.latticeSize-1 +2*bin(self.lattice[0]^self.lattice[1]).count('1')/self.Length-1 )/2# \sigma_(i,j)*\sigma(i+j,j)
         return param
     
     def LatticeOrderParameter2d(self):
