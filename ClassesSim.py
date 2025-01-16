@@ -335,7 +335,7 @@ class MCCTClassical:
     
     def stochasticControl2d(self,prob):
         for i in range(self.numChains):
-            if random.random()>(prob/100.):
+            if random.random()>(prob):
                 self.lattice[i]=self.bernoulli(self.lattice[i])
             else:
                 self.lattice[i]=self.control(self.lattice[i])
@@ -343,7 +343,7 @@ class MCCTClassical:
     # the correct phase transition is maintained in 1d
     @profile
     def stochasticControl1d(self,prob):
-        if random.random()>(prob/100.):
+        if random.random()>(prob):
             self.lattice[0]=self.bernoulli(self.lattice[0])
         else:
             self.lattice[0]=self.control(self.lattice[0])
