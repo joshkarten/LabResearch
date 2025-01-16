@@ -552,11 +552,11 @@ class MCCTClassical:
             return
     def StepStochLadder(self,time,probS,probC,b,p1,p2,itt):
         if not (time%self.sampleFreq):
-            self.record1[itt,2*time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[0])
-            self.record2[itt,2*time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[1])
-            self.recordlong[itt,2*time//self.sampleFreq,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
-            self.recordMag[itt,2*time//self.sampleFreq,b,p1,p2]=self.Magnetization()
-            self.recordMagS[itt,2*time//self.sampleFreq,b,p1,p2]=self.StaggeredMagnetization() 
+            self.record1[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[0])
+            self.record2[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[1])
+            self.recordlong[itt,time//self.sampleFreq,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
+            self.recordMag[itt,time//self.sampleFreq,b,p1,p2]=self.Magnetization()
+            self.recordMagS[itt,time//self.sampleFreq,b,p1,p2]=self.StaggeredMagnetization() 
         if random.random()< probS:
             self.stochasticControl(probC)
         else:
