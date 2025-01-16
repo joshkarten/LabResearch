@@ -319,6 +319,8 @@ class MCCTClassical:
             self.record1= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange))) #\sigma_i\sigma_j in a chain, effectively our energy
             self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))#Magnetization
             self.recordMagS =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange))) #staggered magnetization
+            self.time_size=self.time_size//2
+
             return
         if self.twoChains:
             self.record1= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))#1st chan
@@ -327,10 +329,13 @@ class MCCTClassical:
             
             self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))
             self.recordMagS =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))
+            self.time_size=self.time_size//2
+
             return
         self.recordtot= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange))) # over entire lattice
         self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))
         self.recordMagS =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))
+        self.time_size=self.time_size//2
         return
     
     def stochasticControl2d(self,prob):
@@ -524,7 +529,6 @@ class MCCTClassical:
         Currently only works for a two-chain system'''
         self.pstoch = pstoch
         self.pctrl = pctrl
-        self.time_size=self.time_size//2
         self.acceptance = np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(self.pctrl))) # keeps track of monte carlo acceptance per step
 
         self.record1= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))#1st chan
@@ -544,14 +548,20 @@ class MCCTClassical:
                         self.createLattice()
                         for time in range(self.totSteps):
                             self.StepStochLadder(time,probS,probC,b,p,p2,itt)
+                        self.record1[itt,time//self.sampleFreq,b,p,p2]=self.order_parameter(self.lattice[0])
+                        self.record2[itt,time//self.sampleFreq,b,p,p2]=self.order_parameter(self.lattice[1])
+                        self.recordlong[itt,time//self.sampleFreq,b,p,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
+                        self.recordMag[itt,time//self.sampleFreq,b,p,p2]=self.Magnetization()
+                        self.recordMagS[itt,time//self.sampleFreq,b,p,p2]=self.StaggeredMagnetization() 
                     p2+=1
                 p+=1
             b+=1
-            if self.twoChains:
-                self.recordtot = (self.record1+self.record2+self.recordlong)/3
-            return
+        if self.twoChains:
+            self.recordtot = (self.record1+self.record2+self.recordlong)/3
+        return
     def StepStochLadder(self,time,probS,probC,b,p1,p2,itt):
         if not (time%self.sampleFreq):
+            print(time,b,p1,p2)
             self.record1[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[0])
             self.record2[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[1])
             self.recordlong[itt,time//self.sampleFreq,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
