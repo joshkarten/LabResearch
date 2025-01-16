@@ -389,6 +389,29 @@ class MCCTClassical:
                 if self.energyDict[mbit,ubit,dbit,lbit]>random.random(): 
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
+        return   
+    def monteCarloLadder(self,time,betaNum,probNum1,probNum2,itt):
+        if not (time%self.sampleFreq):
+            for nr in repeat(None,self.mcrep):
+                x_pos =  random.randrange(self.numChains)
+                y_pos =  random.randrange(self.Length)
+
+                mbit,ubit,dbit,lbit = self.BitConfiguration(x_pos,y_pos)
+
+                if self.energyDict[mbit,ubit,dbit,lbit]>random.random(): 
+                    self.acceptance[itt,time//self.sampleFreq,betaNum,probNum1,probNum2] += 1
+                    self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+
+        else:
+            for nr in repeat(None,self.mcrep):
+                x_pos =  random.randrange(self.numChains)
+                y_pos = random.randrange(self.Length)
+ 
+                mbit,ubit,dbit,lbit = self.BitConfiguration(x_pos,y_pos)
+
+                if self.energyDict[mbit,ubit,dbit,lbit]>random.random(): 
+                    self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+
         return             
     
     def monteCarlo2d(self,time,betaNum,probNum,itt):
@@ -493,3 +516,47 @@ class MCCTClassical:
             self.recordtot = (self.record1+self.record2+self.recordlong)/3
         return
         
+    def FullyStochasticSimulation(self,pstoch,pctrl):
+        '''
+        This is for a simulation where you replace the individual steps of the simulation with probabilities to select a certain step. 
+        To make this easier to compute, this choice is divided into two steps: MC vs Stochastic -> (if Stochastic) Control vs Bernoulli'''
+        self.pstoch = pstoch
+        self.pctrl = pctrl
+        self.time_size=self.time_size//2
+        self.acceptance = np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(self.pctrl))) # keeps track of monte carlo acceptance per step
+
+        self.record1= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))#1st chan
+        self.record2= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))# 2nd chain
+        self.recordlong= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))  # between chains
+        
+        self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))
+        self.recordMagS =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))
+        b=0
+        for beta in self.betarange:
+            p=0
+            self.LookupEnergy(self.K,beta)
+            for probS in self.pstoch:
+                p2=0
+                for probC in self.pctrl:
+                    for itt in range(self.iterations):
+                        self.createLattice()
+                        for time in range(self.totSteps):
+                            self.Step(time,probS,probC,b,p,p2,itt)
+                    p2+=1
+                p+=1
+            b+=1
+            if self.twoChains:
+                self.recordtot = (self.record1+self.record2+self.recordlong)/3
+            return
+    def StepStochLadder(self,time,probS,probC,b,p1,p2,itt):
+        if not (time%self.sampleFreq):
+            self.record1[itt,2*time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[0])
+            self.record2[itt,2*time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[1])
+            self.recordlong[itt,2*time//self.sampleFreq,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
+            self.recordMag[itt,2*time//self.sampleFreq,b,p1,p2]=self.Magnetization()
+            self.recordMagS[itt,2*time//self.sampleFreq,b,p1,p2]=self.StaggeredMagnetization() 
+        if random.random()< probS:
+            self.stochasticControl(probC)
+        else:
+            self.monteCarlo(time,b,p1,p2,itt)
+        return
