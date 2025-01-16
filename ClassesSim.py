@@ -519,7 +519,9 @@ class MCCTClassical:
     def FullyStochasticSimulation(self,pstoch,pctrl):
         '''
         This is for a simulation where you replace the individual steps of the simulation with probabilities to select a certain step. 
-        To make this easier to compute, this choice is divided into two steps: MC vs Stochastic -> (if Stochastic) Control vs Bernoulli'''
+        To make this easier to compute, this choice is divided into two steps: MC vs Stochastic -> (if Stochastic) Control vs Bernoulli.
+        
+        Currently only works for a two-chain system'''
         self.pstoch = pstoch
         self.pctrl = pctrl
         self.time_size=self.time_size//2
@@ -541,7 +543,7 @@ class MCCTClassical:
                     for itt in range(self.iterations):
                         self.createLattice()
                         for time in range(self.totSteps):
-                            self.Step(time,probS,probC,b,p,p2,itt)
+                            self.StepStochLadder(time,probS,probC,b,p,p2,itt)
                     p2+=1
                 p+=1
             b+=1
