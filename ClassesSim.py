@@ -243,12 +243,12 @@ class MCCTClassical:
         self.energyDict[0,1,1,1,0]=self.energyDict[1,1,0,0,0]  #16
         return self.energyDict
     # check this for proper iplementation
-    # verified for lattices [0,0],[15,15],[0,15],[15,0],[5,10],[0,10],
+    # verified for lattices [0,0],[15,15],[0,15],[15,0],[5,10],[0,10],[14,15]
     def LatticeOrderParameterLad(self):
         param = 0
         for i in self.lattice:
             param += (bin(self.left(i)^i).count('1')) # \sigma_(i,j)*\sigma_(i,j+1)
-        param= (2*param/self.latticeSize-1 +2*bin(self.lattice[0]^self.lattice[1]).count('1')/self.Length-1 )/2# \sigma_(i,j)*\sigma(i+j,j)
+        param= (2*param/self.Length-2 +2*bin(self.lattice[0]^self.lattice[1]).count('1')/self.Length-1 )/3# \sigma_(i,j)*\sigma(i+j,j)
         return param
     
     def LatticeOrderParameter2d(self):
@@ -395,7 +395,7 @@ class MCCTClassical:
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         return   
-    def monteCarloLadder(self,time,betaNum,probNum1,probNum2,itt):
+    def monteCarloLadder2(self,time,betaNum,probNum1,probNum2,itt):
         if not (time%self.sampleFreq):
             for nr in repeat(None,self.mcrep):
                 x_pos =  random.randrange(self.numChains)
@@ -569,5 +569,5 @@ class MCCTClassical:
         if random.random()< probS:
             self.stochasticControl(probC)
         else:
-            self.monteCarlo(time,b,p1,p2,itt)
+            self.monteCarloLadder2(time,b,p1,p2,itt)
         return
