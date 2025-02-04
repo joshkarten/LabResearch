@@ -6,7 +6,7 @@ import os
 from line_profiler import profile
 
 class MCCTClassical:
-    def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1,boltzmannMod=1/2, perLatSweep=True  ):
+    def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1,boltzmannMod=1/2, perLatSweep=True, fullStoch=False  ):
         self.Length = Length # how long is each bit string
         self.sampleFreq = sampleFreq #after how many update steps are the parameters calculated
         self.numChains = numChains # how many bit strings are there
@@ -23,6 +23,7 @@ class MCCTClassical:
         self.twoChains=True if numChains==2 else False
         self.latticeSize=Length*numChains
         self.boltzmannMod=boltzmannMod
+        self.fullStoch=fullStoch
         if perLatSweep:
             self.mcrep = self.latticeSize
         else:
@@ -45,7 +46,6 @@ class MCCTClassical:
         """
         Conversion of a decimal between 0 and 1 into an integer between 0 and 2**Length-1
         :type num: Fraction
-        :type length: int
         """
         assert 0 <= num < 1, self.Length > 0
         return int(num * (2 ** self.Length))
@@ -53,7 +53,6 @@ class MCCTClassical:
 
     def reset(self,bin_num):
         """
-        :type bin_num: int
         odd numbers end with b_L =1
         num - 1 for set b_L = 0 if odd
         """
@@ -65,9 +64,7 @@ class MCCTClassical:
     def left(self,num):
         """
 
-        :param num: int
-        :param length: int
-        :return: int
+  
         """
         #if num >= 2 << (length - 2):
         #    num = (num << 1) ^ 1
@@ -79,8 +76,6 @@ class MCCTClassical:
     def right(self,num):
         """
 
-        :param num: int
-        :return: int
         """
         num = self.reset(num)
         # if num % 2 ==1 and (num//2) % 2 == 0 and (num//4)%2 == 1:
@@ -130,10 +125,18 @@ class MCCTClassical:
     #so, from the bits, we can just determine the energy without additional calculation.   
         '''        
         Returns the targeted bit and the nearest neighbor bits (up,down, left) in an integer.'''
-        mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
-        ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
-        dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
-        return mainBit,ubit,dbit
+        if not position_y: #select bits centered on position 0 on the bitstring x
+            #dbit = (self.lattice[position_x]&(1<<self.Length))>>self.Length
+            #twobits= (self.lattice[position_x]&3)>>1
+            chainbits = ((self.lattice[position_x]&3)<<1)+((self.lattice[position_x]&(1<<self.Length))>>self.Length)
+        elif position_y==self.Length-1: #select bits centered on position L-1 on the bitstring x
+           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Length-2))))>>(self.Length-2)))
+        else:
+           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+        #mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
+        #ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
+        #dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
+        return chainbits
 
     def BitConfigurationLad(self,position_x,position_y):
     #problem: individual calculations are incredibly inefficient
@@ -141,106 +144,199 @@ class MCCTClassical:
     #so, from the bits, we can just determine the energy without additional calculation.   
         '''        
         Returns the targeted bit and the nearest neighbor bits (up,down, left) in an integer.'''
-        mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
-        ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
-        dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
+        if not position_y: #select bits centered on position 0 on the bitstring x
+            #dbit = (self.lattice[position_x]&(1<<self.Length))>>self.Length
+            #twobits= (self.lattice[position_x]&3)>>1
+            chainbits = ((self.lattice[position_x]&3)<<1)+((self.lattice[position_x]&(1<<self.Length))>>self.Length)
+        elif position_y==self.Length-1: #select bits centered on position L-1 on the bitstring x
+           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Length-2))))>>(self.Length-2)))
+        else:
+           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+        #mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
+        #ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
+        #dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
         lbit =((self.lattice[position_x-1]&(1<<position_y))>>(position_y))
-        return mainBit,ubit,dbit, lbit
-
+        #return mainBit,ubit,dbit, lbit
+        return chainbits,lbit
     def BitConfiguration2d(self,position_x,position_y):
     #problem: individual calculations are incredibly inefficient
     #solution: Make lookup tables for everything
     #so, from the bits, we can just determine the energy without additional calculation.   
         '''        
         Returns the targeted bit and the nearest neighbor bits (up,down, left, right) in an integer.'''
-        mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
-        ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
-        dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
+        if not position_y: #select bits centered on position 0 on the bitstring x
+            #dbit = (self.lattice[position_x]&(1<<self.Length))>>self.Length
+            #twobits= (self.lattice[position_x]&3)>>1
+            chainbits = ((self.lattice[position_x]&3)<<1)+((self.lattice[position_x]&(1<<self.Length))>>self.Length)
+        elif position_y==self.Length-1: #select bits centered on position L-1 on the bitstring x
+           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Length-2))))>>(self.Length-2)))
+        else:
+           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+
+
+        #mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
+        #ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
+        #dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
         lbit =((self.lattice[position_x-1]&(1<<position_y))>>(position_y))
-        rbit=(self.lattice[(1+position_x)%self.numChains]&(1<<position_y)>>position_y)
-        return mainBit,ubit,dbit,lbit,rbit
-   
+        rbit=(((self.lattice[(1+position_x)%self.numChains])&(1<<position_y))>>position_y)
+        #return mainBit,ubit,dbit,lbit,rbit
+        return chainbits,lbit,rbit
     # The lookup dictionary is designed around taking in as many bits as there are nearest neighbors.
     #  Thus this imp has a bunch of different tables for each dimensionality
     @profile
     def LookupEnergy1d(self,K,Beta):
-        self.energyDict={}
-        self.energyDict[0,0,0] =min(self.boltzmannMod,self.boltzmann_probability(2*K,-2*K,Beta))
-        self.energyDict[1,1,1]=self.energyDict[0,0,0]
+        self.energyDict={} #more efficient imp has not been verified explicitly
+        self.energyDict[0b000] =min(self.boltzmannMod,self.boltzmann_probability(2*K,-2*K,Beta))
+        self.energyDict[0b111]=self.energyDict[0b000]
 
-        self.energyDict[0,1,0]=min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
-        self.energyDict[0,0,1]=self.energyDict[0,1,0]
-        self.energyDict[1,0,1]=self.energyDict[0,1,0]
-        self.energyDict[1,1,0]=self.energyDict[0,1,0]
+        self.energyDict[0b011]=min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
+        self.energyDict[0b001]=self.energyDict[0b011]
+        self.energyDict[0b100]=self.energyDict[0b011]
+        self.energyDict[0b110]=self.energyDict[0b011]
 
-        self.energyDict[0,1,1]=min(self.boltzmannMod,self.boltzmann_probability(-2*K,2*K,Beta))
-        self.energyDict[1,0,0]=self.energyDict[0,1,1]
+        self.energyDict[0b010]=min(self.boltzmannMod,self.boltzmann_probability(-2*K,2*K,Beta))
+        self.energyDict[0b101]=self.energyDict[0b010]
+        #
+        #self.energyDict[0,0,0] =min(self.boltzmannMod,self.boltzmann_probability(2*K,-2*K,Beta))
+        #self.energyDict[1,1,1]=self.energyDict[0,0,0]
+
+        #self.energyDict[0,1,0]=min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
+        #self.energyDict[0,0,1]=self.energyDict[0,1,0]
+        #self.energyDict[1,0,1]=self.energyDict[0,1,0]
+        #self.energyDict[1,1,0]=self.energyDict[0,1,0]
+
+        #self.energyDict[0,1,1]=min(self.boltzmannMod,self.boltzmann_probability(-2*K,2*K,Beta))
+        #self.energyDict[1,0,0]=self.energyDict[0,1,1]
         return self.energyDict
     
     def LookupEnergyLad2d(self,K,Beta):
         self.energyDict = {}
-        
-        self.energyDict[0,0,0,1] =  min(self.boltzmannMod,self.boltzmann_probability(K,-K,Beta))
-        self.energyDict[0,0,1,0]=self.energyDict[0,0,0,1]
-        self.energyDict[0,1,0,0]=self.energyDict[0,0,0,1]
+        # One diff
+        self.energyDict[0b000,1] =  min(self.boltzmannMod,self.boltzmann_probability(K,-K,Beta))
+        self.energyDict[0b001,0]=self.energyDict[0b000,1]
+        self.energyDict[0b100,0]=self.energyDict[0b000,1]
+        # One same
+        self.energyDict[0b010,1]=min(self.boltzmannMod, self.boltzmann_probability(-K,K,Beta))
+        self.energyDict[0b011,0]=self.energyDict[0b010,1]
+        self.energyDict[0b110,0]=self.energyDict[0b010,1]
+        # All/None Same
+        self.energyDict[0b000,0]=min(self.boltzmannMod,self.boltzmann_probability(K*3,K*-3,Beta))
+        self.energyDict[0b010,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-3,K*3,Beta))
+        self.energyDict[0b101,1]=self.energyDict[0b010,0]#8
+        self.energyDict[0b111,1]=self.energyDict[0b000,0] 
+        # One Diff
+        self.energyDict[0b011,1]=self.energyDict[0b000,1] 
+        self.energyDict[0b110,1]=self.energyDict[0b000,1] 
+        self.energyDict[0b111,0]=self.energyDict[0b000,1] 
+        # One Same
+        self.energyDict[0b101,0]=self.energyDict[0b010,1]
+        self.energyDict[0b001,1]=self.energyDict[0b010,1]
+        self.energyDict[0b100,1]=self.energyDict[0b010,1]
+        #
+        #self.energyDict[0,0,0,1] =  min(self.boltzmannMod,self.boltzmann_probability(K,-K,Beta))
+        #self.energyDict[0,0,1,0]=self.energyDict[0,0,0,1]
+        #self.energyDict[0,1,0,0]=self.energyDict[0,0,0,1]
 
-        self.energyDict[1,0,0,1]=min(self.boltzmannMod, self.boltzmann_probability(-K,K,Beta))
-        self.energyDict[1,0,1,0]=self.energyDict[1,0,0,1]
-        self.energyDict[1,1,0,0]=self.energyDict[1,0,0,1]
+        #self.energyDict[1,0,0,1]=min(self.boltzmannMod, self.boltzmann_probability(-K,K,Beta))
+        #self.energyDict[1,0,1,0]=self.energyDict[1,0,0,1]
+        #self.energyDict[1,1,0,0]=self.energyDict[1,0,0,1]
 
-        self.energyDict[0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*3,K*-3,Beta))
-        self.energyDict[1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-3,K*3,Beta))
-        self.energyDict[0,1,1,1]=self.energyDict[1,0,0,0]#8
-        self.energyDict[1,1,1,1]=self.energyDict[0,0,0,0] 
+        #self.energyDict[0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*3,K*-3,Beta))
+        #self.energyDict[1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-3,K*3,Beta))
+        #self.energyDict[0,1,1,1]=self.energyDict[1,0,0,0]#8
+        #self.energyDict[1,1,1,1]=self.energyDict[0,0,0,0] 
 
-        self.energyDict[1,0,1,1]=self.energyDict[0,0,0,1] 
-        self.energyDict[1,1,0,1]=self.energyDict[0,1,0,0] 
-        self.energyDict[1,1,1,0]=self.energyDict[0,1,0,0] 
+        #self.energyDict[1,0,1,1]=self.energyDict[0,0,0,1] 
+        #self.energyDict[1,1,0,1]=self.energyDict[0,1,0,0] 
+        #self.energyDict[1,1,1,0]=self.energyDict[0,1,0,0] 
 
-        self.energyDict[0,1,1,0]=self.energyDict[1,0,0,1]
-        self.energyDict[0,0,1,1]=self.energyDict[1,0,0,1]
-        self.energyDict[0,1,0,1]=self.energyDict[1,0,0,1]
+        #self.energyDict[0,1,1,0]=self.energyDict[1,0,0,1]
+        #self.energyDict[0,0,1,1]=self.energyDict[1,0,0,1]
+        #self.energyDict[0,1,0,1]=self.energyDict[1,0,0,1]
         return self.energyDict
     
     def LookupEnergy2d(self,K,Beta):
         self.energyDict = {}
-        self.energyDict[0,0,0,1,1] = min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
-        self.energyDict[0,0,1,0,1]=self.energyDict[0,0,0,1,1]
-        self.energyDict[0,1,0,0,1]=self.energyDict[0,0,0,1,1]
-        self.energyDict[0,1,1,0,0]=self.energyDict[0,0,0,1,1] #4
-        self.energyDict[0,1,0,1,0]=self.energyDict[0,0,0,1,1] #5
-        self.energyDict[0,0,1,1,0]=self.energyDict[0,0,0,1,1] #6
+        
+        #2**5=32
+        self.energyDict[0b111,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*4,K*-4,Beta))
+        self.energyDict[0b000,0,0] = self.energyDict[0b111,1,1]
+        #2 All same
+        self.energyDict[0b101,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*(-4),K*4,Beta))
+        self.energyDict[0b010,0,0] = self.energyDict[0b101,1,1]
+        #2 All diff
+        self.energyDict[0b001,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*2,K*-2,Beta))
+        self.energyDict[0b100,1,1] = self.energyDict[0b001,1,1]
+        self.energyDict[0b101,0,1] = self.energyDict[0b001,1,1]
+        self.energyDict[0b101,1,0] = self.energyDict[0b001,1,1]
+        #4 One same
+        self.energyDict[0b110,0,0] = self.energyDict[0b001,1,1]
+        self.energyDict[0b011,0,0] = self.energyDict[0b001,1,1]
+        self.energyDict[0b010,1,0] = self.energyDict[0b001,1,1]
+        self.energyDict[0b010,0,1] = self.energyDict[0b001,1,1]
+        #4 One Same
+        self.energyDict[0b011,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
+        self.energyDict[0b110,1,1] = self.energyDict[0b011,1,1]
+        self.energyDict[0b111,0,1] = self.energyDict[0b011,1,1]
+        self.energyDict[0b111,1,0] = self.energyDict[0b011,1,1]
+        #4 One diff
+        self.energyDict[0b100,0,0] = self.energyDict[0b011,1,1]
+        self.energyDict[0b001,0,0] = self.energyDict[0b011,1,1]
+        self.energyDict[0b000,1,0] = self.energyDict[0b011,1,1]
+        self.energyDict[0b000,0,1] = self.energyDict[0b011,1,1]
+        #4 One diff
+        self.energyDict[0b010,1,1] = min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
+        self.energyDict[0b101,0,0] = self.energyDict[0b010,1,1]
+        self.energyDict[0b100,1,0] = self.energyDict[0b010,1,1]
+        self.energyDict[0b100,0,1] = self.energyDict[0b010,1,1]
+        self.energyDict[0b001,1,0] = self.energyDict[0b010,1,1]
+        self.energyDict[0b001,0,1] = self.energyDict[0b010,1,1]
+        #6 Eq
+        self.energyDict[0b111,0,0] = self.energyDict[0b010,1,1]
+        self.energyDict[0b110,1,0] = self.energyDict[0b010,1,1]
+        self.energyDict[0b110,0,1] = self.energyDict[0b010,1,1]
+        self.energyDict[0b011,1,0] = self.energyDict[0b010,1,1]
+        self.energyDict[0b011,0,1] = self.energyDict[0b010,1,1]
+        self.energyDict[0b000,1,1] = self.energyDict[0b010,1,1]
+        #6 Eq
+        
+        #self.energyDict[0,0,0,1,1] = min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
+        #self.energyDict[0,0,1,0,1]=self.energyDict[0,0,0,1,1]
+        #self.energyDict[0,1,0,0,1]=self.energyDict[0,0,0,1,1]
+        #self.energyDict[0,1,1,0,0]=self.energyDict[0,0,0,1,1] #4
+        #self.energyDict[0,1,0,1,0]=self.energyDict[0,0,0,1,1] #5
+        #self.energyDict[0,0,1,1,0]=self.energyDict[0,0,0,1,1] #6
 
-        self.energyDict[1,0,0,1,1]=self.energyDict[0,0,0,1,1]
-        self.energyDict[1,0,1,0,1]=self.energyDict[0,0,0,1,1]
-        self.energyDict[1,1,0,0,1]=self.energyDict[0,0,0,1,1]
-        self.energyDict[1,1,1,0,0]=self.energyDict[0,0,0,1,1]
-        self.energyDict[1,1,0,1,0]=self.energyDict[0,0,0,1,1] #5
-        self.energyDict[1,0,1,1,0]=self.energyDict[0,0,0,1,1] #6
+        #self.energyDict[1,0,0,1,1]=self.energyDict[0,0,0,1,1]
+        #self.energyDict[1,0,1,0,1]=self.energyDict[0,0,0,1,1]
+        #self.energyDict[1,1,0,0,1]=self.energyDict[0,0,0,1,1]
+        #self.energyDict[1,1,1,0,0]=self.energyDict[0,0,0,1,1]
+        #self.energyDict[1,1,0,1,0]=self.energyDict[0,0,0,1,1] #5
+        #self.energyDict[1,0,1,1,0]=self.energyDict[0,0,0,1,1] #6
 
-        self.energyDict[0,0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*4,K*-4,Beta))
-        self.energyDict[1,0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-4,K*4,Beta))
-        self.energyDict[0,1,1,1,1]=self.energyDict[1,0,0,0,0]#8
-        self.energyDict[1,1,1,1,1]=self.energyDict[0,0,0,0,0] 
+        #self.energyDict[0,0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*4,K*-4,Beta))
+        #self.energyDict[1,0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-4,K*4,Beta))
+        #self.energyDict[0,1,1,1,1]=self.energyDict[1,0,0,0,0]#8
+        #self.energyDict[1,1,1,1,1]=self.energyDict[0,0,0,0,0] 
 
-        self.energyDict[0,1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*2,K*-2,Beta))
-        self.energyDict[0,0,1,0,0]=self.energyDict[0,1,0,0,0] 
-        self.energyDict[0,0,0,1,0]=self.energyDict[0,1,0,0,0] 
-        self.energyDict[0,0,0,0,1]=self.energyDict[0,1,0,0,0]  #12
+        #self.energyDict[0,1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*2,K*-2,Beta))
+        #self.energyDict[0,0,1,0,0]=self.energyDict[0,1,0,0,0] 
+        #self.energyDict[0,0,0,1,0]=self.energyDict[0,1,0,0,0] 
+        #self.energyDict[0,0,0,0,1]=self.energyDict[0,1,0,0,0]  #12
 
-        self.energyDict[1,0,1,1,1]=self.energyDict[0,1,0,0,0] 
-        self.energyDict[1,1,0,1,1]=self.energyDict[0,1,0,0,0] 
-        self.energyDict[1,1,1,0,1]=self.energyDict[0,1,0,0,0] 
-        self.energyDict[1,1,1,1,0]=self.energyDict[0,1,0,0,0]  #12
+        #self.energyDict[1,0,1,1,1]=self.energyDict[0,1,0,0,0] 
+        #self.energyDict[1,1,0,1,1]=self.energyDict[0,1,0,0,0] 
+        #self.energyDict[1,1,1,0,1]=self.energyDict[0,1,0,0,0] 
+        #self.energyDict[1,1,1,1,0]=self.energyDict[0,1,0,0,0]  #12
 
-        self.energyDict[1,1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
-        self.energyDict[1,0,1,0,0]=self.energyDict[1,1,0,0,0] 
-        self.energyDict[1,0,0,1,0]=self.energyDict[1,1,0,0,0] 
-        self.energyDict[1,0,0,0,1]=self.energyDict[1,1,0,0,0]  #16
-        self.energyDict[0,0,1,1,1]=min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
-        self.energyDict[0,1,0,1,1]=self.energyDict[1,1,0,0,0] 
-        self.energyDict[0,1,1,0,1]=self.energyDict[1,1,0,0,0] 
-        self.energyDict[0,1,1,1,0]=self.energyDict[1,1,0,0,0]  #16
+        #self.energyDict[1,1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
+        #self.energyDict[1,0,1,0,0]=self.energyDict[1,1,0,0,0] 
+        #self.energyDict[1,0,0,1,0]=self.energyDict[1,1,0,0,0] 
+        #self.energyDict[1,0,0,0,1]=self.energyDict[1,1,0,0,0]  #16
+        #self.energyDict[0,0,1,1,1]=min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
+        #self.energyDict[0,1,0,1,1]=self.energyDict[1,1,0,0,0] 
+        #self.energyDict[0,1,1,0,1]=self.energyDict[1,1,0,0,0] 
+        #self.energyDict[0,1,1,1,0]=self.energyDict[1,1,0,0,0]  #16
         return self.energyDict
     # check this for proper iplementation
     # verified for lattices [0,0],[15,15],[0,15],[15,0],[5,10],[0,10],[14,15]
@@ -302,13 +398,16 @@ class MCCTClassical:
             self.monteCarlo=self.monteCarlo2d
             self.LatticeOrderParameter=self.LatticeOrderParameter2d
             self.Step = self.Step2D
+        if self.fullStoch:
+            self.monteCarlo=self.monteCarloLadder2
+            self.Simulation=self.FullyStochasticSimulation
         return
     @profile
     def createLattice(self):
         lat = []
         for i in repeat(None,self.numChains):
             lat.append(random.getrandbits(self.Length))
-        self.lattice=np.array(lat)
+        self.lattice=np.array(lat,dtype=object)
         return
     
     def createSamplingArrays(self):
@@ -358,16 +457,16 @@ class MCCTClassical:
         if not (time%self.sampleFreq):
             for nr in repeat(None,self.mcrep):
                 y_pos = random.randrange(self.Length)
-                mbit,ubit,dbit = self.BitConfiguration(0,y_pos)
-                if self.energyDict[mbit,ubit,dbit]>random.random(): 
+                chainbits = self.BitConfiguration(0,y_pos)
+                if self.energyDict[chainbits]>random.random(): 
                     self.acceptance[itt,time//self.sampleFreq,betaNum,probNum] += 1
                     self.lattice[0] = self.lattice[0]^(0b1<<y_pos)
 
         else:
             for nr in repeat(None,self.mcrep):
                 y_pos = random.randrange(self.Length)
-                mbit,ubit,dbit, = self.BitConfiguration(0, y_pos)
-                if self.energyDict[mbit,ubit,dbit]>random.random(): 
+                chainbits= self.BitConfiguration(0, y_pos)
+                if self.energyDict[chainbits]>random.random(): 
                     self.lattice[0] = self.lattice[0]^(0b1<<y_pos)
 
         return
@@ -378,9 +477,10 @@ class MCCTClassical:
                 x_pos =  random.randrange(self.numChains)
                 y_pos =  random.randrange(self.Length)
 
-                mbit,ubit,dbit,lbit = self.BitConfiguration(x_pos,y_pos)
+                chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
+                #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
 
-                if self.energyDict[mbit,ubit,dbit,lbit]>random.random(): 
+                if self.energyDict[chainbits,lbit]>random.random(): 
                     self.acceptance[itt,time//self.sampleFreq,betaNum,probNum] += 1
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
@@ -389,9 +489,10 @@ class MCCTClassical:
                 x_pos =  random.randrange(self.numChains)
                 y_pos = random.randrange(self.Length)
  
-                mbit,ubit,dbit,lbit = self.BitConfiguration(x_pos,y_pos)
+                chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
+                #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
 
-                if self.energyDict[mbit,ubit,dbit,lbit]>random.random(): 
+                if self.energyDict[chainbits,lbit]>random.random(): 
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         return   
@@ -401,9 +502,10 @@ class MCCTClassical:
                 x_pos =  random.randrange(self.numChains)
                 y_pos =  random.randrange(self.Length)
 
-                mbit,ubit,dbit,lbit = self.BitConfiguration(x_pos,y_pos)
+                chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
+                #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
 
-                if self.energyDict[mbit,ubit,dbit,lbit]>random.random(): 
+                if self.energyDict[chainbits,lbit]>random.random(): 
                     self.acceptance[itt,time//self.sampleFreq,betaNum,probNum1,probNum2] += 1
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
@@ -412,22 +514,23 @@ class MCCTClassical:
                 x_pos =  random.randrange(self.numChains)
                 y_pos = random.randrange(self.Length)
  
-                mbit,ubit,dbit,lbit = self.BitConfiguration(x_pos,y_pos)
+                chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
+                #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
 
-                if self.energyDict[mbit,ubit,dbit,lbit]>random.random(): 
+                if self.energyDict[chainbits,lbit]>random.random(): 
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         return             
     
     def monteCarlo2d(self,time,betaNum,probNum,itt):
         if not (time%self.mcrep):
-            for nr in repeat(None,self.latticeSize):
+            for nr in repeat(None,self.mcrep):
                 x_pos =  random.randrange(self.numChains)
                 y_pos =  random.randrange(self.Length)
 
-                mbit,ubit,dbit,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
-
-                if self.energyDict[mbit,ubit,dbit,lbit,rbit]>random.random(): 
+                chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+                #cbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+                if self.energyDict[chainbits,lbit,rbit]>random.random(): 
                     self.acceptance[itt,time//self.sampleFreq,betaNum,probNum] += 1
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
@@ -436,9 +539,10 @@ class MCCTClassical:
                 x_pos =  random.randrange(self.numChains)
                 y_pos =  random.randrange(self.Length)
 
-                mbit,ubit,dbit,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+                chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+                #cbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
 
-                if self.energyDict[mbit,ubit,dbit,lbit,rbit]>random.random(): 
+                if self.energyDict[chainbits,lbit,rbit]>random.random(): 
                     self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
         return
     @profile
@@ -548,11 +652,11 @@ class MCCTClassical:
                         self.createLattice()
                         for time in range(self.totSteps):
                             self.StepStochLadder(time,probS,probC,b,p,p2,itt)
-                        self.record1[itt,time//self.sampleFreq,b,p,p2]=self.order_parameter(self.lattice[0])
-                        self.record2[itt,time//self.sampleFreq,b,p,p2]=self.order_parameter(self.lattice[1])
-                        self.recordlong[itt,time//self.sampleFreq,b,p,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
-                        self.recordMag[itt,time//self.sampleFreq,b,p,p2]=self.Magnetization()
-                        self.recordMagS[itt,time//self.sampleFreq,b,p,p2]=self.StaggeredMagnetization() 
+                        self.record1[itt,-1,b,p,p2]=self.order_parameter(self.lattice[0])
+                        self.record2[itt,-1,b,p,p2]=self.order_parameter(self.lattice[1])
+                        self.recordlong[itt,-1,b,p,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
+                        self.recordMag[itt,-1,b,p,p2]=self.Magnetization()
+                        self.recordMagS[itt,-1,b,p,p2]=self.StaggeredMagnetization() 
                     p2+=1
                 p+=1
             b+=1
@@ -569,5 +673,5 @@ class MCCTClassical:
         if random.random()< probS:
             self.stochasticControl(probC)
         else:
-            self.monteCarloLadder2(time,b,p1,p2,itt)
+            self.monteCarlo(time,b,p1,p2,itt)
         return
