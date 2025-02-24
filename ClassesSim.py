@@ -24,6 +24,8 @@ class MCCTClassical:
         self.latticeSize=Length*numChains
         self.boltzmannMod=boltzmannMod
         self.fullStoch=fullStoch
+        self.Lm=self.Length-1
+        self.Lmm = self.Length-2
         if perLatSweep:
             self.mcrep = self.latticeSize
         else:
@@ -125,14 +127,14 @@ class MCCTClassical:
     #so, from the bits, we can just determine the energy without additional calculation.   
         '''        
         Returns the targeted bit and the nearest neighbor bits (up,down, left) in an integer.'''
-        if not position_y: #select bits centered on position 0 on the bitstring x
+        if position_y==self.Lm: #select bits centered on position L-1 on the bitstring x
+           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Lmm))))>>(self.Lmm)))
+        elif position_y: 
+           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+        else: #select bits centered on position 0 on the bitstring x
             #dbit = (self.lattice[position_x]&(1<<self.Length))>>self.Length
             #twobits= (self.lattice[position_x]&3)>>1
-            chainbits = ((self.lattice[position_x]&3)<<1)+((self.lattice[position_x]&(1<<self.Length))>>self.Length)
-        elif position_y==self.Length-1: #select bits centered on position L-1 on the bitstring x
-           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Length-2))))>>(self.Length-2)))
-        else:
-           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+            chainbits = ((self.lattice[position_x]&3)<<1)+(((self.lattice[position_x])&(1<<self.Lm))>>(self.Lm))
         #mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
         #ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
         #dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
@@ -144,14 +146,14 @@ class MCCTClassical:
     #so, from the bits, we can just determine the energy without additional calculation.   
         '''        
         Returns the targeted bit and the nearest neighbor bits (up,down, left) in an integer.'''
-        if not position_y: #select bits centered on position 0 on the bitstring x
+        if position_y==self.Lm: #select bits centered on position L-1 on the bitstring x
+           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Lmm))))>>(self.Lmm)))
+        elif position_y: 
+           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+        else: #select bits centered on position 0 on the bitstring x
             #dbit = (self.lattice[position_x]&(1<<self.Length))>>self.Length
             #twobits= (self.lattice[position_x]&3)>>1
-            chainbits = ((self.lattice[position_x]&3)<<1)+((self.lattice[position_x]&(1<<self.Length))>>self.Length)
-        elif position_y==self.Length-1: #select bits centered on position L-1 on the bitstring x
-           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Length-2))))>>(self.Length-2)))
-        else:
-           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+            chainbits = ((self.lattice[position_x]&3)<<1)+(((self.lattice[position_x])&(1<<self.Lm))>>(self.Lm))
         #mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
         #ubit = (self.lattice[position_x]&(1 << (position_y-1)%self.Length))>>(position_y-1)%self.Length
         #dbit= ((self.lattice[position_x]&(1<<(position_y+1)%self.Length))>>(position_y+1)%self.Length)
@@ -164,14 +166,15 @@ class MCCTClassical:
     #so, from the bits, we can just determine the energy without additional calculation.   
         '''        
         Returns the targeted bit and the nearest neighbor bits (up,down, left, right) in an integer.'''
-        if not position_y: #select bits centered on position 0 on the bitstring x
+       
+        if position_y==self.Lm: #select bits centered on position L-1 on the bitstring x
+           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Lmm))))>>(self.Lmm)))
+        elif position_y: 
+           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+        else: #select bits centered on position 0 on the bitstring x
             #dbit = (self.lattice[position_x]&(1<<self.Length))>>self.Length
             #twobits= (self.lattice[position_x]&3)>>1
-            chainbits = ((self.lattice[position_x]&3)<<1)+((self.lattice[position_x]&(1<<self.Length))>>self.Length)
-        elif position_y==self.Length-1: #select bits centered on position L-1 on the bitstring x
-           chainbits = ((self.lattice[position_x]&1)<<2)+(((self.lattice[position_x]&((3<<(self.Length-2))))>>(self.Length-2)))
-        else:
-           chainbits = (self.lattice[position_x]&(7<<(position_y-1)))>>(position_y-1)
+            chainbits = ((self.lattice[position_x]&3)<<1)+(((self.lattice[position_x])&(1<<self.Lm))>>(self.Lm))
 
 
         #mainBit =(self.lattice[position_x]&(1<<position_y))>>(position_y)
@@ -257,7 +260,8 @@ class MCCTClassical:
     
     def LookupEnergy2d(self,K,Beta):
         self.energyDict = {}
-        
+        # This can also be a loop without significant performance decrease. Just make sure that, when sampling over parameters that Beta changes, and thus 
+        # updates to this energy dictionary, are in the outer most loop
         #2**5=32
         self.energyDict[0b111,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*4,K*-4,Beta))
         self.energyDict[0b000,0,0] = self.energyDict[0b111,1,1]
@@ -265,7 +269,7 @@ class MCCTClassical:
         self.energyDict[0b101,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*(-4),K*4,Beta))
         self.energyDict[0b010,0,0] = self.energyDict[0b101,1,1]
         #2 All diff
-        self.energyDict[0b001,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*2,K*-2,Beta))
+        self.energyDict[0b001,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
         self.energyDict[0b100,1,1] = self.energyDict[0b001,1,1]
         self.energyDict[0b101,0,1] = self.energyDict[0b001,1,1]
         self.energyDict[0b101,1,0] = self.energyDict[0b001,1,1]
@@ -275,7 +279,7 @@ class MCCTClassical:
         self.energyDict[0b010,1,0] = self.energyDict[0b001,1,1]
         self.energyDict[0b010,0,1] = self.energyDict[0b001,1,1]
         #4 One Same
-        self.energyDict[0b011,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
+        self.energyDict[0b011,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*2,K*-2,Beta))
         self.energyDict[0b110,1,1] = self.energyDict[0b011,1,1]
         self.energyDict[0b111,0,1] = self.energyDict[0b011,1,1]
         self.energyDict[0b111,1,0] = self.energyDict[0b011,1,1]
@@ -650,8 +654,12 @@ class MCCTClassical:
                 for probC in self.pctrl:
                     for itt in range(self.iterations):
                         self.createLattice()
-                        for time in range(self.totSteps):
+                        #for time in range(self.totSteps):
+                        #    self.StepStochLadder(time,probS,probC,b,p,p2,itt)
+                        for time in range(self.totSteps//self.sampleFreq):
                             self.StepStochLadder(time,probS,probC,b,p,p2,itt)
+                        for time in repeat(None,self.totSteps%self.sampleFreq):
+                            self.StepStochLadder(-1,probS,probC,b,p,p2,itt)
                         self.record1[itt,-1,b,p,p2]=self.order_parameter(self.lattice[0])
                         self.record2[itt,-1,b,p,p2]=self.order_parameter(self.lattice[1])
                         self.recordlong[itt,-1,b,p,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
@@ -664,14 +672,15 @@ class MCCTClassical:
             self.recordtot = (self.record1+self.record2+self.recordlong)/3
         return
     def StepStochLadder(self,time,probS,probC,b,p1,p2,itt):
-        if not (time%self.sampleFreq):
-            self.record1[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[0])
-            self.record2[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[1])
-            self.recordlong[itt,time//self.sampleFreq,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
-            self.recordMag[itt,time//self.sampleFreq,b,p1,p2]=self.Magnetization()
-            self.recordMagS[itt,time//self.sampleFreq,b,p1,p2]=self.StaggeredMagnetization() 
-        if random.random()< probS:
-            self.stochasticControl(probC)
-        else:
-            self.monteCarlo(time,b,p1,p2,itt)
-        return
+        #if not (time%self.sampleFreq):
+        self.record1[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[0])
+        self.record2[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[1])
+        self.recordlong[itt,time//self.sampleFreq,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
+        self.recordMag[itt,time//self.sampleFreq,b,p1,p2]=self.Magnetization()
+        self.recordMagS[itt,time//self.sampleFreq,b,p1,p2]=self.StaggeredMagnetization() 
+        for i in repeat(None,self.sampleFreq):
+            if random.random()< probS:
+                self.stochasticControl(probC)
+            else:
+                self.monteCarlo(time,b,p1,p2,itt)
+            return
