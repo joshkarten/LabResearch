@@ -501,28 +501,28 @@ class MCCTClassical:
 
         return   
     def monteCarloLadder2(self,time,betaNum,probNum1,probNum2,itt):
-        if not (time%self.sampleFreq):
-            for nr in repeat(None,self.mcrep):
-                x_pos =  random.randrange(self.numChains)
-                y_pos =  random.randrange(self.Length)
+        #if not (time%self.sampleFreq): # can do massive speedup here by not calculating acceptance ratio
+        #    for nr in repeat(None,self.mcrep):
+        #        x_pos =  random.randrange(self.numChains)
+        #        y_pos =  random.randrange(self.Length)
 
-                chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
+         #       chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
                 #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
 
-                if self.energyDict[chainbits,lbit]>random.random(): 
-                    self.acceptance[itt,time//self.sampleFreq,betaNum,probNum1,probNum2] += 1
-                    self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+        #        if self.energyDict[chainbits,lbit]>random.random(): 
+        #            self.acceptance[itt,time//self.sampleFreq,betaNum,probNum1,probNum2] += 1
+        #            self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
-        else:
-            for nr in repeat(None,self.mcrep):
-                x_pos =  random.randrange(self.numChains)
-                y_pos = random.randrange(self.Length)
- 
-                chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
-                #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
+        #else:
+        #for nr in repeat(None,self.mcrep):
+        x_pos =  random.randrange(self.numChains)
+        y_pos = random.randrange(self.Length)
 
-                if self.energyDict[chainbits,lbit]>random.random(): 
-                    self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+        chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
+        #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
+
+        if self.energyDict[chainbits,lbit]>random.random(): 
+            self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         return             
     
@@ -656,10 +656,8 @@ class MCCTClassical:
                         self.createLattice()
                         #for time in range(self.totSteps):
                         #    self.StepStochLadder(time,probS,probC,b,p,p2,itt)
-                        for time in range(self.totSteps//self.sampleFreq):
+                        for time in range(self.time_size):
                             self.StepStochLadder(time,probS,probC,b,p,p2,itt)
-                        for time in repeat(None,self.totSteps%self.sampleFreq):
-                            self.StepStochLadder(-1,probS,probC,b,p,p2,itt)
                         self.record1[itt,-1,b,p,p2]=self.order_parameter(self.lattice[0])
                         self.record2[itt,-1,b,p,p2]=self.order_parameter(self.lattice[1])
                         self.recordlong[itt,-1,b,p,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
@@ -673,14 +671,14 @@ class MCCTClassical:
         return
     def StepStochLadder(self,time,probS,probC,b,p1,p2,itt):
         #if not (time%self.sampleFreq):
-        self.record1[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[0])
-        self.record2[itt,time//self.sampleFreq,b,p1,p2]=self.order_parameter(self.lattice[1])
-        self.recordlong[itt,time//self.sampleFreq,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
-        self.recordMag[itt,time//self.sampleFreq,b,p1,p2]=self.Magnetization()
-        self.recordMagS[itt,time//self.sampleFreq,b,p1,p2]=self.StaggeredMagnetization() 
+        self.record1[itt,time,b,p1,p2]=self.order_parameter(self.lattice[0])
+        self.record2[itt,time,b,p1,p2]=self.order_parameter(self.lattice[1])
+        self.recordlong[itt,time,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
+        self.recordMag[itt,time,b,p1,p2]=self.Magnetization()
+        self.recordMagS[itt,time,b,p1,p2]=self.StaggeredMagnetization() 
         for i in repeat(None,self.sampleFreq):
             if random.random()< probS:
                 self.stochasticControl(probC)
             else:
                 self.monteCarlo(time,b,p1,p2,itt)
-            return
+        return
