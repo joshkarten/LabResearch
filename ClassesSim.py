@@ -6,7 +6,7 @@ import os
 from line_profiler import profile
 
 class MCCTClassical:
-    def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1,boltzmannMod=1/2, perLatSweep=True, fullStoch=False  ):
+    def __init__(self,Length, numChains,sampleFreq,totSteps, betarange, probrange, iterations, coupling,ControlFreq=1, MonteCarloFreq=1,boltzmannMod=1/2, perLatSweep=False, fullStoch=True, setXJ=False, xj= np.array([Fraction(1,3),Fraction(2,3)]), randomControl=True, magField=0):
         self.Length = Length # how long is each bit string
         self.sampleFreq = sampleFreq #after how many update steps are the parameters calculated
         self.numChains = numChains # how many bit strings are there
@@ -16,28 +16,31 @@ class MCCTClassical:
         self.MonteCarloFreq=MonteCarloFreq # how many times per step is the monte carlo step performed
         self.betarange=betarange # over what thermodynamic betas are we sampling
         self.probrange=probrange # over what probability of selecting the control map (inclusive) are we sampling
-        self.allones = (1<<(self.Length))
+        self.allones = (1<<(self.Length))-1
         self.totSteps=totSteps # total number of update steps
-        self.xj = np.array([Fraction(1/3),Fraction(2/3)])# fixed points for the control map
-        self.xjint =np.array([self.dec2int(self.xj[0]),self.dec2int(self.xj[1])])
+        self.neel=np.array((self.dec2int(Fraction(1,3)),self.dec2int(Fraction(2,3))))
+        self.xj = xj# fixed points for the control map
+        self.xjint =np.array([self.dec2int(i) for i in xj],dtype=object)
         self.twoChains=True if numChains==2 else False
         self.latticeSize=Length*numChains
         self.boltzmannMod=boltzmannMod
         self.fullStoch=fullStoch
         self.Lm=self.Length-1
         self.Lmm = self.Length-2
+        self.setXJ=setXJ
+        self.randomControl=randomControl
+        self.magField=magField
         if perLatSweep:
             self.mcrep = self.latticeSize
         else:
             self.mcrep=1
         # number of data points along the time axis
-        # we add 50 additional points to cluster our samples close to the start
         if not (self.totSteps%self.sampleFreq):
             self.time_size = (self.totSteps)//self.sampleFreq+1
             
         else: 
             self.time_size = (self.totSteps)//self.sampleFreq+2
-        self.setDimensionality() # chooses functions to used based on number of chains
+        self.setDimensionality() # chooses functions to used based on number of chains, gets around python's lack of overloading
         self.createSamplingArrays() # these arrays store the calculated parameters
         if self.MonteCarloFreq==0:
             betarange=[0]
@@ -85,7 +88,7 @@ class MCCTClassical:
         num = num // 2
         return num
 
-    @profile
+    
     def order_parameter(self,num):
         '''
         Calculates sigma_i sigma_j in an integer represenation of a bitstring.'''
@@ -94,19 +97,13 @@ class MCCTClassical:
 
         return count
 
-    @profile
+    
     def bernoulli(self,num):
         num = self.left(num)
         num = num & (~0b111)
         return num + random.getrandbits(3)
 
-    @profile
-    def control(self,num):
-
-        if num < 2 ** (self.Length-1):
-            xj = self.dec2int(Fraction(1, 3))
-        else:
-            xj = self.dec2int(Fraction(2, 3))
+    def controlSet(self,num,xj):
         if num == xj:
             return num
         else:
@@ -114,13 +111,26 @@ class MCCTClassical:
         if temp == num:
             return num + 1
         return temp
-    @profile
+    def controlNorm(self,num,xj):
+
+        if num < 2 ** (self.Length-1):
+            xj = self.xjint[0]
+        else:
+            xj = self.xjint[1]
+        if num == xj:
+            return num
+        else:
+            temp = self.right(num) + self.right(xj)
+        if temp == num:
+            return num + 1
+        return temp
+    
     def boltzmann_probability(self,initial, final, beta):
         '''
         Calculates a value from a modified Boltzmann distribution. The choice of 1/2 (which modifies the distribution) is to create bit scrambling when Beta=0 '''
         return np.exp(-beta * (final - initial))*self.boltzmannMod
         #boltzmann weight. we take 1/2 such that the state is continuously randomized at infinite
-    @profile
+    
     def BitConfiguration1d(self,position_x,position_y):
     #problem: individual calculations are incredibly inefficient
     #solution: Make lookup tables for everything
@@ -186,7 +196,7 @@ class MCCTClassical:
         return chainbits,lbit,rbit
     # The lookup dictionary is designed around taking in as many bits as there are nearest neighbors.
     #  Thus this imp has a bunch of different tables for each dimensionality
-    @profile
+    
     def LookupEnergy1d(self,K,Beta):
         self.energyDict={} #more efficient imp has not been verified explicitly
         self.energyDict[0b000] =min(self.boltzmannMod,self.boltzmann_probability(2*K,-2*K,Beta))
@@ -214,27 +224,27 @@ class MCCTClassical:
     
     def LookupEnergyLad2d(self,K,Beta):
         self.energyDict = {}
-        # One diff
-        self.energyDict[0b000,1] =  min(self.boltzmannMod,self.boltzmann_probability(K,-K,Beta))
+        # One diff, up
+        self.energyDict[0b000,1] =  min(self.boltzmannMod,self.boltzmann_probability(K-self.magField,-K+self.magField,Beta))
         self.energyDict[0b001,0]=self.energyDict[0b000,1]
         self.energyDict[0b100,0]=self.energyDict[0b000,1]
-        # One same
-        self.energyDict[0b010,1]=min(self.boltzmannMod, self.boltzmann_probability(-K,K,Beta))
+        # One same, up
+        self.energyDict[0b010,1]=min(self.boltzmannMod, self.boltzmann_probability(-K+self.magField,K-self.magField,Beta))
         self.energyDict[0b011,0]=self.energyDict[0b010,1]
         self.energyDict[0b110,0]=self.energyDict[0b010,1]
         # All/None Same
-        self.energyDict[0b000,0]=min(self.boltzmannMod,self.boltzmann_probability(K*3,K*-3,Beta))
-        self.energyDict[0b010,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-3,K*3,Beta))
-        self.energyDict[0b101,1]=self.energyDict[0b010,0]#8
-        self.energyDict[0b111,1]=self.energyDict[0b000,0] 
-        # One Diff
-        self.energyDict[0b011,1]=self.energyDict[0b000,1] 
-        self.energyDict[0b110,1]=self.energyDict[0b000,1] 
-        self.energyDict[0b111,0]=self.energyDict[0b000,1] 
-        # One Same
-        self.energyDict[0b101,0]=self.energyDict[0b010,1]
-        self.energyDict[0b001,1]=self.energyDict[0b010,1]
-        self.energyDict[0b100,1]=self.energyDict[0b010,1]
+        self.energyDict[0b000,0]=min(self.boltzmannMod,self.boltzmann_probability(K*3-self.magField,K*-3+self.magField,Beta))
+        self.energyDict[0b010,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-3+self.magField,K*3-self.magField,Beta))
+        self.energyDict[0b101,1]=min(self.boltzmannMod, self.boltzmann_probability(-3*K-self.magField,K*3+self.magField,Beta))#8
+        self.energyDict[0b111,1]= min(self.boltzmannMod,self.boltzmann_probability(K*3+self.magField,-K*3-self.magField,Beta)) 
+        # One Diff, down
+        self.energyDict[0b011,1]=min(self.boltzmannMod,self.boltzmann_probability(K+self.magField,-K-self.magField,Beta))
+        self.energyDict[0b110,1]=self.energyDict[0b011,1] 
+        self.energyDict[0b111,0]=self.energyDict[0b011,1] 
+        # One Same, down
+        self.energyDict[0b101,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-3-self.magField,K*3+self.magField,Beta))
+        self.energyDict[0b001,1]=self.energyDict[0b101,0]
+        self.energyDict[0b100,1]=self.energyDict[0b101,0]
         #
         #self.energyDict[0,0,0,1] =  min(self.boltzmannMod,self.boltzmann_probability(K,-K,Beta))
         #self.energyDict[0,0,1,0]=self.energyDict[0,0,0,1]
@@ -263,84 +273,46 @@ class MCCTClassical:
         # This can also be a loop without significant performance decrease. Just make sure that, when sampling over parameters that Beta changes, and thus 
         # updates to this energy dictionary, are in the outer most loop
         #2**5=32
-        self.energyDict[0b111,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*4,K*-4,Beta))
-        self.energyDict[0b000,0,0] = self.energyDict[0b111,1,1]
+        self.energyDict[0b111,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*4+self.magField,K*-4-self.magField,Beta))
+        self.energyDict[0b000,0,0] = min(self.boltzmannMod,self.boltzmann_probability(K*4-self.magField,K*-4+self.magField,Beta))
         #2 All same
-        self.energyDict[0b101,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*(-4),K*4,Beta))
-        self.energyDict[0b010,0,0] = self.energyDict[0b101,1,1]
+        self.energyDict[0b101,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*(-4)-self.magField,K*4+self.magField,Beta))
+        self.energyDict[0b010,0,0] =  min(self.boltzmannMod,self.boltzmann_probability(K*(-4)+self.magField,K*4-self.magField,Beta))
         #2 All diff
-        self.energyDict[0b001,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
+        self.energyDict[0b001,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*-2-self.magField,K*2+self.magField,Beta))
         self.energyDict[0b100,1,1] = self.energyDict[0b001,1,1]
         self.energyDict[0b101,0,1] = self.energyDict[0b001,1,1]
         self.energyDict[0b101,1,0] = self.energyDict[0b001,1,1]
         #4 One same
-        self.energyDict[0b110,0,0] = self.energyDict[0b001,1,1]
-        self.energyDict[0b011,0,0] = self.energyDict[0b001,1,1]
-        self.energyDict[0b010,1,0] = self.energyDict[0b001,1,1]
-        self.energyDict[0b010,0,1] = self.energyDict[0b001,1,1]
+        self.energyDict[0b110,0,0] = min(self.boltzmannMod,self.boltzmann_probability(K*-2+self.magField,K*2-self.magField,Beta))
+        self.energyDict[0b011,0,0] = self.energyDict[0b110,0,0]
+        self.energyDict[0b010,1,0] = self.energyDict[0b110,0,0]
+        self.energyDict[0b010,0,1] = self.energyDict[0b110,0,0]
         #4 One Same
-        self.energyDict[0b011,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*2,K*-2,Beta))
+        self.energyDict[0b011,1,1] = min(self.boltzmannMod,self.boltzmann_probability(K*2+self.magField,K*-2-self.magField,Beta))
         self.energyDict[0b110,1,1] = self.energyDict[0b011,1,1]
         self.energyDict[0b111,0,1] = self.energyDict[0b011,1,1]
         self.energyDict[0b111,1,0] = self.energyDict[0b011,1,1]
         #4 One diff
-        self.energyDict[0b100,0,0] = self.energyDict[0b011,1,1]
-        self.energyDict[0b001,0,0] = self.energyDict[0b011,1,1]
-        self.energyDict[0b000,1,0] = self.energyDict[0b011,1,1]
-        self.energyDict[0b000,0,1] = self.energyDict[0b011,1,1]
+        self.energyDict[0b100,0,0] = min(self.boltzmannMod,self.boltzmann_probability(K*2-self.magField,K*-2+self.magField,Beta))
+        self.energyDict[0b001,0,0] =  self.energyDict[0b100,0,0]
+        self.energyDict[0b000,1,0] =  self.energyDict[0b100,0,0]
+        self.energyDict[0b000,0,1] =  self.energyDict[0b100,0,0]
         #4 One diff
-        self.energyDict[0b010,1,1] = min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
+        self.energyDict[0b010,1,1] = min(self.boltzmannMod,self.boltzmann_probability(self.magField,-self.magField,Beta))
         self.energyDict[0b101,0,0] = self.energyDict[0b010,1,1]
-        self.energyDict[0b100,1,0] = self.energyDict[0b010,1,1]
-        self.energyDict[0b100,0,1] = self.energyDict[0b010,1,1]
-        self.energyDict[0b001,1,0] = self.energyDict[0b010,1,1]
-        self.energyDict[0b001,0,1] = self.energyDict[0b010,1,1]
+        self.energyDict[0b100,1,0] =  min(self.boltzmannMod,self.boltzmann_probability(-self.magField,self.magField,Beta))
+        self.energyDict[0b100,0,1] = self.energyDict[0b100,1,0]
+        self.energyDict[0b001,1,0] = self.energyDict[0b100,1,0]
+        self.energyDict[0b001,0,1] = self.energyDict[0b100,1,0]
         #6 Eq
         self.energyDict[0b111,0,0] = self.energyDict[0b010,1,1]
         self.energyDict[0b110,1,0] = self.energyDict[0b010,1,1]
         self.energyDict[0b110,0,1] = self.energyDict[0b010,1,1]
         self.energyDict[0b011,1,0] = self.energyDict[0b010,1,1]
         self.energyDict[0b011,0,1] = self.energyDict[0b010,1,1]
-        self.energyDict[0b000,1,1] = self.energyDict[0b010,1,1]
-        #6 Eq
-        
-        #self.energyDict[0,0,0,1,1] = min(self.boltzmannMod,self.boltzmann_probability(0,0,Beta))
-        #self.energyDict[0,0,1,0,1]=self.energyDict[0,0,0,1,1]
-        #self.energyDict[0,1,0,0,1]=self.energyDict[0,0,0,1,1]
-        #self.energyDict[0,1,1,0,0]=self.energyDict[0,0,0,1,1] #4
-        #self.energyDict[0,1,0,1,0]=self.energyDict[0,0,0,1,1] #5
-        #self.energyDict[0,0,1,1,0]=self.energyDict[0,0,0,1,1] #6
-
-        #self.energyDict[1,0,0,1,1]=self.energyDict[0,0,0,1,1]
-        #self.energyDict[1,0,1,0,1]=self.energyDict[0,0,0,1,1]
-        #self.energyDict[1,1,0,0,1]=self.energyDict[0,0,0,1,1]
-        #self.energyDict[1,1,1,0,0]=self.energyDict[0,0,0,1,1]
-        #self.energyDict[1,1,0,1,0]=self.energyDict[0,0,0,1,1] #5
-        #self.energyDict[1,0,1,1,0]=self.energyDict[0,0,0,1,1] #6
-
-        #self.energyDict[0,0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*4,K*-4,Beta))
-        #self.energyDict[1,0,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-4,K*4,Beta))
-        #self.energyDict[0,1,1,1,1]=self.energyDict[1,0,0,0,0]#8
-        #self.energyDict[1,1,1,1,1]=self.energyDict[0,0,0,0,0] 
-
-        #self.energyDict[0,1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*2,K*-2,Beta))
-        #self.energyDict[0,0,1,0,0]=self.energyDict[0,1,0,0,0] 
-        #self.energyDict[0,0,0,1,0]=self.energyDict[0,1,0,0,0] 
-        #self.energyDict[0,0,0,0,1]=self.energyDict[0,1,0,0,0]  #12
-
-        #self.energyDict[1,0,1,1,1]=self.energyDict[0,1,0,0,0] 
-        #self.energyDict[1,1,0,1,1]=self.energyDict[0,1,0,0,0] 
-        #self.energyDict[1,1,1,0,1]=self.energyDict[0,1,0,0,0] 
-        #self.energyDict[1,1,1,1,0]=self.energyDict[0,1,0,0,0]  #12
-
-        #self.energyDict[1,1,0,0,0]=min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
-        #self.energyDict[1,0,1,0,0]=self.energyDict[1,1,0,0,0] 
-        #self.energyDict[1,0,0,1,0]=self.energyDict[1,1,0,0,0] 
-        #self.energyDict[1,0,0,0,1]=self.energyDict[1,1,0,0,0]  #16
-        #self.energyDict[0,0,1,1,1]=min(self.boltzmannMod,self.boltzmann_probability(K*-2,K*2,Beta))
-        #self.energyDict[0,1,0,1,1]=self.energyDict[1,1,0,0,0] 
-        #self.energyDict[0,1,1,0,1]=self.energyDict[1,1,0,0,0] 
-        #self.energyDict[0,1,1,1,0]=self.energyDict[1,1,0,0,0]  #16
+        self.energyDict[0b000,1,1] = self.energyDict[0b100,1,0]
+       
         return self.energyDict
     # check this for proper iplementation
     # verified for lattices [0,0],[15,15],[0,15],[15,0],[5,10],[0,10],[14,15]
@@ -361,21 +333,20 @@ class MCCTClassical:
         param2 = (2*param2/(self.latticeSize)-1)/2
         return param+param2
 #works as intended
-    @profile
     def Magnetization(self):
-        param =0
+        param =0 
         for i in self.lattice:
             param+= bin(i).count('1')
-        param = 1- 2*param/self.latticeSize
+        param = 1- 2*param/self.latticeSize #0 is positive, 1 is negative
         return param
 #works as intended
-    @profile
+    
     def StaggeredMagnetization(self):
         param =0
         for i in range(0,self.numChains,2):
-            param+= bin(self.lattice[i]^self.xjint[1]).count('1')
+            param+= bin(self.lattice[i]^self.neel[1]).count('1')
         for i in range(1, self.numChains,2):
-            param += bin(self.lattice[i]^self.xjint[0]).count('1')
+            param += bin(self.lattice[i]^self.neel[0]).count('1')
         param = 1-2*param/self.latticeSize
         return param
     
@@ -388,6 +359,12 @@ class MCCTClassical:
             self.monteCarlo=self.monteCarlo1d
             self.LatticeOrderParameter = self.order_parameter
             self.Step=self.Step1D
+            self.Measure=self.Measure1d
+            if self.fullStoch:
+                self.monteCarlo=self.monteCarlo1ds
+                self.Simulation=self.FullyStochasticSimulation
+                if self.randomControl:
+                    self.stochasticControl=self.stochasticControlRand 
         elif self.twoChains:
             self.LookupEnergy = self.LookupEnergyLad2d
             self.BitConfiguration = self.BitConfigurationLad
@@ -395,6 +372,13 @@ class MCCTClassical:
             self.monteCarlo=self.monteCarloLadder
             self.LatticeOrderParameter=self.LatticeOrderParameterLad
             self.Step = self.StepLad
+            self.Measure=self.MeasureLadder
+
+            if self.fullStoch:
+                self.monteCarlo=self.monteCarloLadder2
+                self.Simulation=self.FullyStochasticSimulation
+                if self.randomControl:
+                    self.stochasticControl=self.stochasticControlRand 
         else:
             self.LookupEnergy=self.LookupEnergy2d
             self.BitConfiguration = self.BitConfiguration2d
@@ -402,11 +386,19 @@ class MCCTClassical:
             self.monteCarlo=self.monteCarlo2d
             self.LatticeOrderParameter=self.LatticeOrderParameter2d
             self.Step = self.Step2D
-        if self.fullStoch:
-            self.monteCarlo=self.monteCarloLadder2
-            self.Simulation=self.FullyStochasticSimulation
+            self.Measure=self.Measure2d
+
+            if self.fullStoch:
+                self.monteCarlo=self.monteCarlo2ds
+                self.Simulation=self.FullyStochasticSimulation
+                if self.randomControl:
+                    self.stochasticControl=self.stochasticControlRand 
+        if self.setXJ and self.numChains!=1:
+            self.control=self.controlSet
+        else:
+            self.control=self.controlNorm
         return
-    @profile
+    
     def createLattice(self):
         lat = []
         for i in repeat(None,self.numChains):
@@ -436,6 +428,7 @@ class MCCTClassical:
 
             return
         self.recordtot= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange))) # over entire lattice
+        self.recordChain= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange))) # over all chains
         self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))
         self.recordMagS =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.probrange)))
         self.time_size=self.time_size//2
@@ -446,17 +439,23 @@ class MCCTClassical:
             if random.random()>(prob):
                 self.lattice[i]=self.bernoulli(self.lattice[i])
             else:
-                self.lattice[i]=self.control(self.lattice[i])
+                self.lattice[i]=self.control(self.lattice[i],self.xjint[i%2])
         return
+    def stochasticControlRand(self,prob):
+        i = random.randrange(0,self.numChains)
+        if random.random()>prob:   
+            self.lattice[i]=self.bernoulli(self.lattice[i])
+        else:
+            self.lattice[i]=self.control(self.lattice[i],self.xjint[i%2])
     # the correct phase transition is maintained in 1d
-    @profile
+    
     def stochasticControl1d(self,prob):
         if random.random()>(prob):
             self.lattice[0]=self.bernoulli(self.lattice[0])
         else:
-            self.lattice[0]=self.control(self.lattice[0])
+            self.lattice[0]=self.control(self.lattice[0],None) #none is just a placeholder for convenience
         return
-    @profile
+    
     def monteCarlo1d(self,time,betaNum,probNum,itt):
         if not (time%self.sampleFreq):
             for nr in repeat(None,self.mcrep):
@@ -474,7 +473,23 @@ class MCCTClassical:
                     self.lattice[0] = self.lattice[0]^(0b1<<y_pos)
 
         return
-    
+    def monteCarlo1ds(self,time,betaNum,probNum,probNum2,itt):
+        #if not (time%self.sampleFreq):
+        #    for nr in repeat(None,self.mcrep):
+        #        y_pos = random.randrange(self.Length)
+        #        chainbits = self.BitConfiguration(0,y_pos)
+        #        if self.energyDict[chainbits]>random.random(): 
+        #            self.acceptance[itt,time//self.sampleFreq,betaNum,probNum,probNum2] += 1
+        #            self.lattice[0] = self.lattice[0]^(0b1<<y_pos)
+
+        #else:
+        for nr in repeat(None,self.mcrep):
+            y_pos = random.randrange(self.Length)
+            chainbits= self.BitConfiguration(0, y_pos)
+            if self.energyDict[chainbits]>random.random(): 
+                self.lattice[0] = self.lattice[0]^(0b1<<y_pos)
+
+        return
     def monteCarloLadder(self,time,betaNum,probNum,itt):
         if not (time%self.sampleFreq):
             for nr in repeat(None,self.mcrep):
@@ -514,42 +529,80 @@ class MCCTClassical:
         #            self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         #else:
-        #for nr in repeat(None,self.mcrep):
-        x_pos =  random.randrange(self.numChains)
-        y_pos = random.randrange(self.Length)
+        for nr in repeat(None,self.mcrep):
+            x_pos =  random.randrange(self.numChains)
+            y_pos = random.randrange(self.Length)
 
-        chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
-        #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
+            chainbits,lbit = self.BitConfiguration(x_pos,y_pos)
+            #cbits,lbit = self.BitConfiguration(x_pos,y_pos)
 
-        if self.energyDict[chainbits,lbit]>random.random(): 
-            self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+            if self.energyDict[chainbits,lbit]>random.random(): 
+                self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
         return             
     
     def monteCarlo2d(self,time,betaNum,probNum,itt):
-        if not (time%self.mcrep):
-            for nr in repeat(None,self.mcrep):
-                x_pos =  random.randrange(self.numChains)
-                y_pos =  random.randrange(self.Length)
+        #if not (time%self.mcrep):
+        #    for nr in repeat(None,self.mcrep):
+        #        x_pos =  random.randrange(self.numChains)
+        #        y_pos =  random.randrange(self.Length)
 
-                chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+        #        chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
                 #cbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
-                if self.energyDict[chainbits,lbit,rbit]>random.random(): 
-                    self.acceptance[itt,time//self.sampleFreq,betaNum,probNum] += 1
-                    self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+        #        if self.energyDict[chainbits,lbit,rbit]>random.random(): 
+        #            self.acceptance[itt,time//self.sampleFreq,betaNum,probNum] += 1
+        #            self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
 
-        else:
-            for nr in repeat(None,self.mcrep):
-                x_pos =  random.randrange(self.numChains)
-                y_pos =  random.randrange(self.Length)
+        #else:
+        for nr in repeat(None,self.mcrep):
+            x_pos =  random.randrange(self.numChains)
+            y_pos =  random.randrange(self.Length)
 
-                chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
-                #cbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+            chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+            #cbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
 
-                if self.energyDict[chainbits,lbit,rbit]>random.random(): 
-                    self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+            if self.energyDict[chainbits,lbit,rbit]>random.random(): 
+                self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
         return
-    @profile
+    def monteCarlo2ds(self,time,betaNum,probNum,probNum2,itt):
+        #if not (time%self.mcrep):
+        #    for nr in repeat(None,self.mcrep):
+        #        x_pos =  random.randrange(self.numChains)
+        #        y_pos =  random.randrange(self.Length)
+
+        #        chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+                #cbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+        #        if self.energyDict[chainbits,lbit,rbit]>random.random(): 
+        #            self.acceptance[itt,time//self.sampleFreq,betaNum,probNum,probNum2] += 1
+        #            self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+
+        #else:
+        
+        for nr in repeat(None,self.mcrep):
+            x_pos =  random.randrange(self.numChains)
+            y_pos =  random.randrange(self.Length)
+
+            chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+
+            if self.energyDict[chainbits,lbit,rbit]>random.random(): 
+                self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+        return
+    def monteCarlo2dns(self,time,betaNum,probNum,probNum2,itt):
+     
+        
+        for nr in repeat(None,self.mcrep):
+            x_pos =  random.randrange(self.numChains)
+            y_pos =  random.randrange(self.Length)
+
+            chainbits,lbit,rbit = self.BitConfiguration(x_pos,y_pos)
+
+            if self.energyDict[chainbits,lbit,rbit]>random.random(): 
+                self.lattice[x_pos] = self.lattice[x_pos]^(0b1<<y_pos)
+                self.acceptance[itt,time,betaNum,probNum,probNum2] += 1
+            else:
+                self.stochasticControl(self.pctrl[probNum])
+
+        return
     def Step1D(self,time,prob,b,p,itt):
         if not (time%self.sampleFreq):
             self.record1[itt,2*time//self.sampleFreq,b,p]=self.order_parameter(self.lattice[0])
@@ -611,7 +664,7 @@ class MCCTClassical:
                 self.monteCarlo(time,b,p,itt)
         return
     
-    @profile
+    
     def Simulation(self):
         b=0
         for beta in self.betarange:
@@ -633,8 +686,7 @@ class MCCTClassical:
         '''
         This is for a simulation where you replace the individual steps of the simulation with probabilities to select a certain step. 
         To make this easier to compute, this choice is divided into two steps: MC vs Stochastic -> (if Stochastic) Control vs Bernoulli.
-        
-        Currently only works for a two-chain system'''
+        '''
         self.pstoch = pstoch
         self.pctrl = pctrl
         self.acceptance = np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(self.pctrl))) # keeps track of monte carlo acceptance per step
@@ -642,9 +694,12 @@ class MCCTClassical:
         self.record1= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))#1st chan
         self.record2= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))# 2nd chain
         self.recordlong= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))  # between chains
-        
+        self.recordtot=np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl))) 
+        self.recordChain=np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl))) 
         self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))
         self.recordMagS =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))
+        self.finalState=np.zeros((self.iterations,len(self.betarange),len(self.pstoch),len(pctrl)),dtype=object)
+
         b=0
         for beta in self.betarange:
             p=0
@@ -654,10 +709,20 @@ class MCCTClassical:
                 for probC in self.pctrl:
                     for itt in range(self.iterations):
                         self.createLattice()
-                        #for time in range(self.totSteps):
-                        #    self.StepStochLadder(time,probS,probC,b,p,p2,itt)
+                       
                         for time in range(self.time_size):
-                            self.StepStochLadder(time,probS,probC,b,p,p2,itt)
+                            if probS==1:
+                                self.Measure(time,b,p,p2,itt)
+                                for i in repeat(None,self.sampleFreq):
+                                    self.stochasticControl(probC)
+                            elif probS==0:
+                                self.Measure(time,b,p,p2,itt)
+                                for i in repeat(None,self.sampleFreq):
+                                    self.monteCarlo(time,b,p,p2,itt)
+                            else:
+                                self.StepStoch(time,probS,probC,b,p,p2,itt)
+                        self.finalState[itt,b,p,p2]=self.lattice
+
                         self.record1[itt,-1,b,p,p2]=self.order_parameter(self.lattice[0])
                         self.record2[itt,-1,b,p,p2]=self.order_parameter(self.lattice[1])
                         self.recordlong[itt,-1,b,p,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
@@ -669,16 +734,71 @@ class MCCTClassical:
         if self.twoChains:
             self.recordtot = (self.record1+self.record2+self.recordlong)/3
         return
-    def StepStochLadder(self,time,probS,probC,b,p1,p2,itt):
+    def StepStoch(self,time,probS,probC,b,p1,p2,itt):
         #if not (time%self.sampleFreq):
-        self.record1[itt,time,b,p1,p2]=self.order_parameter(self.lattice[0])
-        self.record2[itt,time,b,p1,p2]=self.order_parameter(self.lattice[1])
-        self.recordlong[itt,time,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
-        self.recordMag[itt,time,b,p1,p2]=self.Magnetization()
-        self.recordMagS[itt,time,b,p1,p2]=self.StaggeredMagnetization() 
+        self.Measure(time,b,p1,p2,itt)
         for i in repeat(None,self.sampleFreq):
             if random.random()< probS:
                 self.stochasticControl(probC)
             else:
                 self.monteCarlo(time,b,p1,p2,itt)
+        return
+    
+    def SimBetaLink(self,pctrl):
+        self.pstoch=[0]
+        self.pctrl = pctrl
+        self.acceptance = np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(self.pctrl))) # keeps track of monte carlo acceptance per step
+
+        self.record1= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))#1st chan
+        self.record2= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))# 2nd chain
+        self.recordlong= np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))  # between chains
+        self.recordtot=np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl))) 
+        self.recordChain=np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl))) 
+        self.recordMag =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))
+        self.recordMagS =  np.zeros((self.iterations,self.time_size,len(self.betarange),len(self.pstoch),len(pctrl)))
+        self.finalState=np.zeros((self.iterations,len(self.betarange),len(self.pstoch),len(pctrl)),dtype=object)
+        p=0
+        b=0
+        for beta in self.betarange:
+            p2=0
+            self.LookupEnergy(self.K,beta)
+            for probC in self.pctrl:
+                for itt in range(self.iterations):
+                    self.createLattice()
+                    
+                    for time in range(self.time_size):
+                    
+                        self.Measure(time,b,p,p2,itt)
+                        for i in repeat(None,self.sampleFreq):
+                            self.monteCarlo2dns(time,b,p,p2,itt)
+                        self.acceptance[itt,time,b,p,p2] =self.acceptance[itt,time,b,p,p2]/(self.mcrep*self.sampleFreq)
+                    self.finalState[itt,b,p,p2]=self.lattice
+                    self.Measure(-1,b,p,p2,itt)
+                p2+=1
+            
+            b+=1
+
+    def Measure1d(self,time,b,p1,p2,itt):
+        self.record1[itt,time,b,p1,p2]=self.order_parameter(self.lattice[0])
+        self.recordMag[itt,time,b,p1,p2]=self.Magnetization()
+        self.recordMagS[itt,time,b,p1,p2]=self.StaggeredMagnetization() 
+        return
+    def MeasureLadder(self,time,b,p1,p2,itt):
+        self.record1[itt,time,b,p1,p2]=self.order_parameter(self.lattice[0])
+        self.record2[itt,time,b,p1,p2]=self.order_parameter(self.lattice[1])
+        self.recordlong[itt,time,b,p1,p2]=2*(bin(self.lattice[0]^self.lattice[1]).count('1'))/self.Length-1
+
+        self.recordMag[itt,time,b,p1,p2]=self.Magnetization()
+        self.recordMagS[itt,time,b,p1,p2]=self.StaggeredMagnetization() 
+        return
+    def Measure2d(self,time,b,p1,p2,itt):
+        self.record1[itt,time,b,p1,p2]=self.order_parameter(self.lattice[0]) # just to see if this equilibriates
+
+        self.recordtot[itt,time,b,p1,p2]=self.LatticeOrderParameter()
+        self.recordMag[itt,time,b,p1,p2]=self.Magnetization()
+        self.recordMagS[itt,time,b,p1,p2]=self.StaggeredMagnetization() 
+        param = 0
+        for i in self.lattice:
+            param += (bin(self.left(i,)^i).count('1')) # \sigma_(i,j)*\sigma_(i,j+1)
+        self.recordChain[itt,time,b,p1,p2] = (2*param/(self.latticeSize)-1)
         return
